@@ -1,96 +1,248 @@
 # Facilities Intelligence Platform (FIP)
 
-**One source of truth for a multi-site hardware company's facilities portfolio.**
+**One source of truth for a multi-site hardware company's facilities portfolio —
+and the decisions that come out of it.**
 
-Most facilities orgs answer questions like *"which sites have quality problems?"*
-or *"which program is about to outgrow its building?"* by emailing three teams and
-stitching spreadsheets together for a week. FIP collapses that into a single
-queryable model: it ingests the exports those teams already produce
-(ERP/CMMS, MRP, HRIS), reconciles them — including a messy newly-acquired site —
-and publishes a layer of documented SQL views that a dashboard (or Tableau) reads
-directly.
+Most facilities organizations answer a simple question — *"which site is about to
+run out of room, and what do we do about it?"* — by emailing three teams and
+stitching spreadsheets together for a week. By the time the answer arrives, the
+window to act on it has often closed.
 
-A facilities VP can open the dashboard and immediately answer:
+FIP collapses that into a single model. It ingests the exports your teams already
+produce (ERP/CMMS, MRP, HRIS, and the messy data dump from a newly-acquired site),
+reconciles them into one clean picture, and turns that picture into **dated
+warnings, owned actions, and a one-page brief you can take into a staff meeting.**
 
-- **Which sites have quality problems?** (and are they getting worse?)
-- **Where are we over/under capacity?** (people with no desk vs. empty seats)
-- **What does each site cost per square foot, all-in?**
-- **Which programs are about to outgrow their building** — *and in which quarter?*
+It runs on a laptop in under two minutes. No cloud account, no Docker, no install
+beyond `pip`.
 
 ---
 
-## Architecture (5 lines)
+## What it lets you answer — and decide
+
+**See the portfolio clearly**
+- Which sites have quality problems, and are they getting better or worse?
+- Where are we over capacity (people with no desk) or paying for empty seats?
+- What does each site really cost per square foot, all-in?
+- One number per site: how healthy is it, and what's dragging it down?
+
+**See the wall before you hit it**
+- Which sites will outgrow their building — **on which constraint (floor space or
+  electrical power), and in which calendar quarter?**
+- Where does a lease decision deadline collide with a capacity breach, leaving too
+  little time to act?
+- What happens to all of the above if a program grows 2× or 3× faster than plan?
+
+**Turn the answer into action**
+- Every risk becomes a tracked item with an **owner and a due date**, color-coded by
+  how long it's been sitting.
+- One click drafts a **stakeholder alert** you can copy, edit, and send.
+- One click produces a **dated executive brief** — headline risk, forecast, open
+  items, and recommended moves — ready to forward.
+
+The headline example today: **Phoenix Production Line is projected to hit its power
+ceiling in 2026-Q4 — one quarter before it runs out of floor space (2027-Q1) — and
+its lease option deadline falls only 60 days before that wall.** Power, not square
+footage, is the binding constraint, and the real-estate clock is already running.
+FIP surfaces all three facts together and recommends shifting overflow to Costa
+Mesa (same region, ample slack).
+
+---
+
+## How it's built (five layers)
 
 ```
 1. SOURCES   simulated exports → seeds/*.csv      (ERP/CMMS · MRP · HRIS · acquired-site dump)
-2. ETL       fip/etl.py        → cleans & reconciles dirty data into the canonical schema
-3. STORE     sql/schema.sql    → 5 normalized tables in SQLite (fip.db)
+2. INGEST    fip/etl.py        → cleans & reconciles dirty data into one canonical model
+3. STORE     sql/schema.sql    → 6 normalized tables in SQLite (fip.db)
 4. SEMANTIC  sql/views.sql     → documented SQL views = the business logic (THE PRODUCT)
 5. DELIVERY  app/dashboard.py  → reads the views (so does Tableau) · tableau_export/*.csv
 ```
 
-Business logic lives **only** in layer 4. Layers 1–3 just get clean data into one
-place; layer 5 is disposable. Swap Streamlit for Tableau and nothing upstream changes.
+The important idea for a leader to trust the numbers: **all of the business logic
+lives in one place — layer 4, the SQL views.** Every figure on the dashboard, in
+the brief, and in the Tableau extracts traces back to a documented view you can
+read. The front end is disposable: swap our dashboard for Tableau and nothing
+upstream changes. There is no hidden math in a spreadsheet or a slide.
 
 ---
 
-## Quickstart (under 2 minutes, no cloud, no Docker)
+## Run it locally (under two minutes)
 
 ```bash
 pip install -r requirements.txt
-make demo          # seed → build → reconcile → export → launch dashboard
+make demo          # seed → build → reconcile → export → launch the dashboard
 ```
 
-`make demo` runs the whole pipeline and serves the dashboard at
-`http://localhost:8501`. Prefer the pieces individually:
+`make demo` builds everything and serves the dashboard at `http://localhost:8501`.
+The dashboard is organized into tabs — Capacity & Scenario, Actions, Lease Cliff,
+Site Health, Quality & Cost, and a 30-second issue-intake form. It also
+self-bootstraps: point it at an empty checkout and it builds its own database on
+first launch.
+
+Prefer the pieces individually:
 
 ```bash
-make pipeline      # build everything, no dashboard (writes fip.db, RECONCILIATION.md, tableau_export/)
+make pipeline      # build everything, no dashboard (writes the DB, the reconciliation
+                   # report, and one clean CSV per view in tableau_export/)
 make dashboard     # serve the dashboard against an existing build
-make test          # run the test suite
+make test          # run the full test suite (46 tests)
+```
+
+And two things you can run straight from the terminal:
+
+```bash
+python -m fip.brief                    # print the dated executive brief
+python -m fip.ask collision            # ask a one-off question against the live model
 ```
 
 ---
 
-## How SQL and Tableau interact (the handoff pattern)
+## The semantic layer — what each view answers
 
-**SQL is the extraction + semantic layer. Tableau is the delivery layer.** They meet
-at the views — and only at the views.
+These nine SQL views *are* the product. Each one carries a comment block stating the
+business question, who asks it, and how often it refreshes.
 
-- All business logic is a SQL view in [`sql/views.sql`](sql/views.sql). Each view
-  carries a comment block stating the **business question**, **who asks it**, and the
-  **refresh cadence**.
-- In production, Tableau connects **live** to these views (or pulls scheduled
-  extracts). Our local Streamlit dashboard reads the *exact same views*. That's the
-  proof: the front end is interchangeable.
-- `make pipeline` also writes [`tableau_export/`](tableau_export/) — one clean CSV per
-  view. The demo line is: *"this folder is exactly what I'd point Tableau at on day one."*
+| View | The question it answers |
+|---|---|
+| `vw_quality_by_site_quarter` | Which sites have quality problems, and is the trend improving or worsening? |
+| `vw_cost_per_sqft` | What does each site cost per square foot, all-in? (safe for sites mid-buildout) |
+| `vw_headcount_vs_seats` | Where are we over capacity vs. paying for empty seats? |
+| `vw_capacity_vs_demand` | How much floor space **and power** does the production plan demand vs. what the building has? |
+| `vw_capacity_collision` ★ | Which sites hit the wall, **on which constraint, and in which quarter?** |
+| `vw_lease_cliff` | Where does a lease option deadline collide with a projected capacity breach? |
+| `vw_site_health` | One composite 0–100 health score per site, with its four underlying drivers. |
+| `vw_open_actions` | Which insights have become owned, dated work — and what's still open? |
+| `vw_reconciliation_status` | How cleanly did the acquired site fold in, and how many items still need a human? |
 
-### Worked example — the question → the view → the chart
+### Worked example — the question → the view → the decision
 
-> **Question (from the COO):** *"Which sites will run out of floor space, and when?"*
+> **From the COO:** *"Which sites are about to run out of capacity, and how much
+> runway do we have?"*
 
-**The view** — [`vw_capacity_collision`](sql/views.sql) takes each site's MRP demand,
-measures its quarter-over-quarter growth in demanded square footage, projects it
-forward, and computes the **calendar quarter** in which demand crosses 85% of the
-building (the point where you start a lease/expansion before hitting 100%):
+`vw_capacity_collision` takes each site's production plan, measures quarter-over-quarter
+growth in **both** demanded floor space and demanded power, projects each forward,
+and reports the quarter in which the **first** ceiling is crossed:
 
-```sql
-SELECT site_name, current_util_pct, projected_util_2q_pct,
-       projected_breach_quarter, collision_status
-FROM   vw_capacity_collision
-WHERE  collision_status = 'COLLISION WARNING';
+| Site | Binding constraint | Breach quarter | Floor util | Power util |
+|---|---|---|---|---|
+| Phoenix Production Line | **POWER** | **2026-Q4** | 75% | 81% and climbing |
+
+`vw_lease_cliff` then layers in the real-estate clock: Phoenix's lease option
+deadline lands **60 days** before that breach — well inside the 180-day comfort
+window — so the site is flagged **AT RISK**. The dashboard shows both as a red
+banner and drafts a stakeholder alert; the exec brief writes it up. That is the
+difference between *seeing* the wall and *deciding* before you hit it.
+
+---
+
+## The decision-support and workflow capabilities
+
+Everything above is reporting. These are the capabilities that move FIP from
+*reporting* to *deciding* to *doing* — added across two phases of work.
+
+**Multi-constraint capacity detection.** A factory rarely runs out of just one
+thing. FIP tracks two ceilings per site — floor square footage and electrical power
+— and always reports the **binding** one (whichever is hit first). The cheap
+constraint to miss is the one you weren't watching; for Phoenix, that's power.
+
+**Scenario modeling.** A sidebar slider lets you scale any site's demand growth from
+0× to 3×. The projected breach quarter, the binding constraint, and the
+recommendations all recompute live — so you can pressure-test *"what if the Anvil
+program ramps twice as fast?"* in the room, not in a follow-up.
+
+**Relocation recommendations.** When a site is at risk, FIP names the best site to
+absorb the overflow — one with enough slack on the binding constraint, preferring
+the same or an adjacent region.
+
+**Lease cliff calendar.** For every leased site, FIP computes the number of days
+between the lease option deadline and the projected capacity breach. A window under
+180 days is flagged AT RISK — that's where the real-estate decision and the capacity
+decision collide and you can least afford to be surprised.
+
+**Site health score.** One number, 0–100, per site — the equal-weight blend of
+capacity headroom, quality, cost efficiency (versus the portfolio median), and data
+completeness. The scorecard ranks the portfolio and expands to show exactly which of
+the four drivers is pulling a site down.
+
+**Action tracker.** Every insight that needs a human becomes a row with an **owner
+and a due date**, color-coded by age (green under 30 days, yellow 30–60, red over
+60). Nothing important quietly ages out of view.
+
+**Stakeholder alerts.** When a collision or lease-cliff risk is live, one button
+drafts a structured, copy-paste heads-up — site, risk type, binding constraint, the
+decision needed, the owner, the deadline, and the recommended action. It sends
+nothing; a human decides who gets it.
+
+**Executive brief.** One button (or one command, `python -m fip.brief`) produces a
+dated one-page brief from the live views: headline risk, the binding-constraint
+forecast, the acquisition reconciliation status, the open-action count and the age
+of the oldest unresolved item, and the recommended moves. Download it as Markdown
+and forward it.
+
+**Ask any one-off, then make it permanent.** For questions on a short timeline, query
+the model directly from the terminal — and promote a useful query into a permanent,
+named view with a single flag:
+
+```bash
+python -m fip.ask quality --site huntsville           # quality at one site
+python -m fip.ask cost                                 # cost/sqft across the portfolio
+python -m fip.ask seats --site costa-mesa --quarter 2026-Q3
+python -m fip.ask collision --site phoenix-line --promote at_risk_sites
 ```
 
-**The answer it returns:**
+---
 
-| site_name | current_util_pct | projected_util_2q_pct | projected_breach_quarter | collision_status |
-|---|---|---|---|---|
-| Phoenix Production Line | 75.0 | 85.0 | **2026-Q2** | COLLISION WARNING |
+## Folding in an acquired site (the "special projects" muscle)
 
-**The chart** — the dashboard renders this as a red alert banner at the top:
-*"Phoenix Production Line — demand growing ~10,000 sq ft/quarter, projected to cross
-85% of the building in **2026-Q2**."* That is ~2 quarters of runway to act.
+Acquisitions never arrive clean. The `quantico-acq` site comes in the way real
+acquired data does — its own column names, three different spellings of the site
+code (`QNTC` / `quantico` / `Quantico Acq.`), a missing square footage, a rent
+formatted as `"$1,200,000"`, and a duplicate row denominated in Canadian dollars.
+
+FIP reconciles everything it safely can and routes the rest to an **exceptions
+queue** for a human — nothing is silently dropped or silently "fixed." Today that
+queue holds exactly **two** items awaiting a decision: the USD-vs-CAD rent conflict,
+and an orphaned quality record pointing at a site (`tucson-line`) that exists in no
+registry. Every build regenerates [`RECONCILIATION.md`](RECONCILIATION.md) so the
+audit trail is always current.
+
+---
+
+## Why you can trust the numbers
+
+- **All logic is in the documented SQL views** — readable, commented, version-
+  controlled. No spreadsheet macros, no per-slide arithmetic.
+- **The dashboard and Tableau read the identical views.** `make pipeline` writes one
+  clean CSV per view into [`tableau_export/`](tableau_export/) — *"this folder is
+  exactly what I'd point Tableau at on day one."*
+- **46 automated tests** cover the data cleaning, every view, the dated collision
+  warning, the multi-constraint binding logic, the scenario math, the lease-cliff
+  and health-score logic, and the brief — so a change that breaks a number is caught
+  before it ships. Run `make test`.
+
+---
+
+## Roadmap — Phase 3
+
+The platform today reasons over a **static plan**. The next phase makes it react to
+the business in real time and connects it to the money.
+
+- **Upstream demand signals.** Replace the seeded MRP/HRIS snapshots with live feeds
+  from the systems of record — program forecasts, the sales/booking pipeline, and
+  hiring plans — so the demand trend updates as the business changes, and leading
+  indicators (a new program win, a forecast revision) move the breach dates the day
+  they happen rather than at the next planning cycle.
+
+- **Capital planning layer.** Turn the collision, lease-cliff, and relocation
+  outputs into a **costed, multi-year capital plan**: what to spend, where, and when;
+  the avoided cost or downtime of acting early versus late; and the trade-off between
+  expanding a building, upgrading its power service, signing a new lease, or shifting
+  a program. Actions get tied to budget lines, and the portfolio can be optimized as
+  a whole instead of one fire at a time.
+
+Together these close the loop — from a live signal upstream, to a dated risk, to an
+owned action, to a funded decision.
 
 ---
 
@@ -98,156 +250,26 @@ WHERE  collision_status = 'COLLISION WARNING';
 
 | Table | System of record | What it holds |
 |---|---|---|
-| `sites` | canonical registry | one row per facility (sq ft, seats, **power kW**, type, status, **lease dates**, provenance) |
-| `leases` | real-estate / finance | annual rent + opex → drives $/sq ft |
+| `sites` | canonical registry | one row per facility — size, seats, power capacity, status, lease dates, provenance |
+| `leases` | real-estate / finance | annual rent + opex → drives cost per square foot |
 | `headcount_snapshots` | **HRIS** | assigned headcount per site/program/quarter |
-| `production_demand` | **MRP** | planned units × sq ft/unit **and × kW/unit** → demanded floor space + power |
+| `production_demand` | **MRP** | planned units × space-per-unit **and × power-per-unit** → demanded floor space + power |
 | `quality_issues` | **ERP/CMMS** + intake form | quality/safety/facility issues, severity, status |
 | `actions` | workflow layer | owned, dated tasks generated from insights (collision / reconciliation / quality) |
 
-See [`sql/schema.sql`](sql/schema.sql) for the full definitions and `etl_exceptions`,
-the quarantine table where un-reconcilable rows go (nothing is silently dropped).
-
-## The semantic layer (the product)
-
-| View | Answers |
-|---|---|
-| `vw_quality_by_site_quarter` | Which sites have quality problems, trending how? |
-| `vw_cost_per_sqft` | All-in cost per square foot, per site (null-safe for buildouts) |
-| `vw_headcount_vs_seats` | Over capacity vs. paying for empty seats |
-| `vw_capacity_vs_demand` | MRP-demanded floor space **and power** vs. what the building has |
-| `vw_capacity_collision` | **Which sites hit the wall, on which constraint, and in which quarter** ★ |
-| `vw_reconciliation_status` | How many sites folded in, how many exceptions still open |
-| `vw_open_actions` | What insights became owned, dated work — and what's still open |
-| `vw_lease_cliff` | Where the lease option deadline and the capacity breach collide |
-| `vw_site_health` | One composite 0–100 health score per site, with its four drivers |
-
----
-
-## Workflow layer (Phase 2 — reporting → deciding → *doing*)
-
-Four features turn the analytics into a tracked workflow:
-
-1. **Actions table.** Every insight that needs a human becomes a trackable, **owned,
-   dated** row in `actions` (source = collision / reconciliation / quality). The
-   Actions tab color-codes open items by age (🟢 <30d · 🟡 30–60d · 🔴 >60d); the
-   age logic lives in [`fip/actions.py`](fip/actions.py) with an injectable `today`
-   so the seed stays deterministic.
-2. **Lease cliff calendar.** `vw_lease_cliff` maps each site's binding breach quarter
-   to a date and computes `decision_window_days` between the lease **option deadline**
-   and that breach. `< 180 days ⇒ AT RISK` — Phoenix's option deadline is set 60 days
-   before its 2026-Q1 power breach, so the real-estate and capacity decisions collide.
-3. **Site health score.** `vw_site_health` is a composite 0–100, the equal-weight
-   average of capacity headroom, quality, cost efficiency (vs the portfolio **median**
-   $/sqft, computed in SQL), and data completeness. The scorecard ranks sites and
-   expands to show each component.
-4. **Stakeholder alert draft.** When a collision warning or a lease-cliff AT RISK flag
-   is live, one button drafts a structured, **copy-paste** heads-up (site, risk type,
-   binding constraint, decision needed, owner, deadline, recommended action) via
-   [`fip/notify.py`](fip/notify.py). It sends nothing — a human decides who gets it.
-
-The exec brief ([`python -m fip.brief`](fip/brief.py)) now also reports the open-actions
-count and the oldest unresolved item's age.
-
----
-
-## Decision support (reporting → deciding)
-
-Three features turn the platform from "here's what's happening" into "here's what to do":
-
-1. **Scenario modeling.** A per-site growth-multiplier slider (0×–3×) in the sidebar
-   re-projects demand on top of the trend the collision view computes. The multiplier
-   scales **both** the floor-sqft and power-kW growth, so the projected breach quarter
-   moves live and a site flips between *no collision* and a binding constraint as growth
-   crosses the wall. Below each warning, FIP recommends the best **relocation candidate** —
-   a site with enough slack on the binding constraint, preferring the same or an adjacent
-   region. All of this math lives in [`fip/scenario.py`](fip/scenario.py); the dashboard
-   only collects slider inputs and renders.
-
-2. **Multi-constraint capacity.** Every site now carries a `power_kw_capacity`, and MRP
-   demand carries `kw_per_unit`, so `vw_capacity_collision` projects **two** ceilings —
-   floor square footage and electrical power — and reports the **binding** one (whichever
-   is hit first, and when). Phoenix is tuned so at 1× it breaches **POWER in 2026-Q1**,
-   one quarter *before* its floor space runs out in 2026-Q2 — the whole point: the cheap
-   constraint to miss is the one you weren't watching.
-
-3. **Exec brief generator.** One button renders a dated one-page Markdown brief from the
-   live views — headline risk, the binding-constraint forecast table, the acquisition
-   reconciliation status with its open-exceptions count, and recommended actions
-   (including the relocation option). Download it as `.md`, or run it headless:
-
-   ```bash
-   python -m fip.brief                 # print the dated brief
-   python -m fip.brief --out brief.md  # write it to a file
-   ```
-
-## Scrappy → scalable: `ask.py`
-
-One-off questions on a short timeline, straight against the views:
-
-```bash
-python -m fip.ask quality --site huntsville          # quality at one site
-python -m fip.ask cost                                # cost/sqft across the portfolio
-python -m fip.ask seats --site costa-mesa --quarter 2025-Q4
-python -m fip.ask collision                           # the at-risk list
-```
-
-When a one-off proves useful, **promote it to a permanent view** with one flag — it
-gets appended to `sql/views.sql` (with a comment block) and registered in the DB, so
-the scrappy query becomes part of the product the dashboard and Tableau can use:
-
-```bash
-python -m fip.ask collision --site phoenix-line --promote at_risk_sites
-```
-
-## Acquisition integration (the "special projects" muscle)
-
-The `quantico-acq` site arrives the way acquired data really does — a dump with its
-own column names, mismatched site codes (`QNTC` / `quantico` / `Quantico Acq.`), a
-NULL square footage, a rent formatted as `"$1,200,000"`, and a duplicate row
-denominated in CAD. The ETL reconciles what it safely can and routes the rest to an
-**exceptions queue** for a human. Every run regenerates
-[`RECONCILIATION.md`](RECONCILIATION.md) — auto-reconciled actions, duplicate
-resolutions, and the queue of items needing a decision.
-
----
-
-## 3-minute demo walkthrough
-
-1. **`make demo`** → "One command seeds simulated ERP/MRP/HRIS exports, cleans them,
-   and serves the dashboard. No cloud, no install beyond pip."
-2. **Top of the dashboard — the red banner.** "The collision detector flags Phoenix:
-   it'll cross 85% floor utilization in **2026-Q2**, ~2 quarters out. That's the
-   predictive layer — we see the wall before we hit it."
-3. **Quality + cost tiles.** "Huntsville is our quality hotspot; Seattle is the cheap
-   $/sq ft outlier at \$3.75; Boston is paying for empty seats while Costa Mesa's ramp
-   blew past its desks." All from SQL views — zero logic in the dashboard.
-4. **`RECONCILIATION.md`.** "The acquired Quantico site came in dirty. Here's what we
-   auto-fixed and the two items queued for a human — the CAD/USD rent conflict and an
-   orphan quality record."
-5. **`tableau_export/`.** "These CSVs are one-per-view. On day one I point Tableau at
-   the live views; the dashboard and Tableau read identical columns."
-
-## Tests
-
-```bash
-make test     # 46 tests: ETL cleaning, view correctness, the dated collision warning,
-              # multi-constraint binding logic, the scenario layer, the exec brief,
-              # plus the workflow layer (actions/age, lease cliff, site health, alerts)
-```
+See [`sql/schema.sql`](sql/schema.sql) for the full definitions, plus `etl_exceptions`,
+the quarantine table where un-reconcilable rows wait for a human.
 
 ## Layout
 
 ```
-sql/        schema.sql · views.sql            ← the model and the product
-fip/        seed.py etl.py reconcile.py        ← build + reconcile
+sql/        schema.sql · views.sql              ← the model and the product (the SQL views)
+fip/        seed.py etl.py reconcile.py          ← generate source data, clean it, reconcile it
             db.py pipeline.py export.py ask.py
-            scenario.py brief.py               ← decision-support logic (scenarios + brief)
-            actions.py notify.py               ← workflow logic (action age + stakeholder alerts)
-app/        dashboard.py                        ← Streamlit delivery layer
-seeds/      *.csv  (generated source exports)
-tableau_export/  *.csv  (generated per-view extracts)
-tests/      test_etl.py test_views.py test_detector.py
-            test_binding.py test_brief.py
-            test_actions.py test_lease_cliff.py test_health.py test_notify.py
+            scenario.py brief.py                 ← decision support (scenarios + exec brief)
+            actions.py notify.py                 ← workflow (action age + stakeholder alerts)
+app/        dashboard.py                          ← the Streamlit front end (presentation only)
+seeds/      *.csv   (the simulated source-system exports)
+tableau_export/  *.csv   (one clean extract per view — the Tableau handoff)
+tests/      46 tests across ingestion, every view, and all decision/workflow logic
 ```
