@@ -1,0 +1,28 @@
+site_id,site_name,region,quarter,seat_capacity,total_headcount,seat_utilization_pct,capacity_flag
+atlanta-campus,Atlanta Innovation Campus,Southeast,2025-Q3,,50,,unknown
+atlanta-campus,Atlanta Innovation Campus,Southeast,2025-Q4,,200,,unknown
+austin-fab,Austin Fabrication,Central,2025-Q1,3000,2400,80.0,healthy
+austin-fab,Austin Fabrication,Central,2025-Q2,3000,2420,80.7,healthy
+austin-fab,Austin Fabrication,Central,2025-Q3,3000,2450,81.7,healthy
+austin-fab,Austin Fabrication,Central,2025-Q4,3000,2480,82.7,healthy
+boston-rd,Boston R&D Lab,Northeast,2025-Q1,400,180,45.0,under-utilized
+boston-rd,Boston R&D Lab,Northeast,2025-Q2,400,185,46.3,under-utilized
+boston-rd,Boston R&D Lab,Northeast,2025-Q3,400,190,47.5,under-utilized
+boston-rd,Boston R&D Lab,Northeast,2025-Q4,400,195,48.8,under-utilized
+costa-mesa,Costa Mesa HQ & Flagship Factory,West,2025-Q1,12000,9000,75.0,healthy
+costa-mesa,Costa Mesa HQ & Flagship Factory,West,2025-Q2,12000,10200,85.0,healthy
+costa-mesa,Costa Mesa HQ & Flagship Factory,West,2025-Q3,12000,11600,96.7,healthy
+costa-mesa,Costa Mesa HQ & Flagship Factory,West,2025-Q4,12000,13400,111.7,over capacity
+huntsville,Huntsville Integration,Southeast,2025-Q1,2500,2000,80.0,healthy
+huntsville,Huntsville Integration,Southeast,2025-Q2,2500,2050,82.0,healthy
+huntsville,Huntsville Integration,Southeast,2025-Q3,2500,2100,84.0,healthy
+huntsville,Huntsville Integration,Southeast,2025-Q4,2500,2150,86.0,healthy
+phoenix-line,Phoenix Production Line,West,2025-Q1,1200,600,50.0,under-utilized
+phoenix-line,Phoenix Production Line,West,2025-Q2,1200,700,58.3,under-utilized
+phoenix-line,Phoenix Production Line,West,2025-Q3,1200,800,66.7,healthy
+phoenix-line,Phoenix Production Line,West,2025-Q4,1200,900,75.0,healthy
+quantico-acq,Quantico Acq.,Mid-Atlantic,2025-Q4,850,850,100.0,healthy
+seattle-ops,Seattle Logistics & Warehouse,West,2025-Q1,500,300,60.0,healthy
+seattle-ops,Seattle Logistics & Warehouse,West,2025-Q2,500,310,62.0,healthy
+seattle-ops,Seattle Logistics & Warehouse,West,2025-Q3,500,320,64.0,healthy
+seattle-ops,Seattle Logistics & Warehouse,West,2025-Q4,500,330,66.0,healthy

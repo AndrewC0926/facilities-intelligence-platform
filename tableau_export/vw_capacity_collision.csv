@@ -1,0 +1,8 @@
+site_id,site_name,available_sqft,latest_quarter,latest_demanded_sqft,growth_sqft_per_quarter,current_util_pct,projected_util_2q_pct,quarters_to_wall,projected_breach_quarter,collision_status
+atlanta-campus,Atlanta Innovation Campus,,2025-Q4,80000.0,40000.0,,,,,unknown — capacity data pending
+austin-fab,Austin Fabrication,800000,2025-Q4,300000.0,0.0,37.5,37.5,,,stable
+boston-rd,Boston R&D Lab,60000,2025-Q4,10000.0,0.0,16.7,16.7,,,stable
+costa-mesa,Costa Mesa HQ & Flagship Factory,5000000,2025-Q4,1200000.0,0.0,24.0,24.0,,,stable
+huntsville,Huntsville Integration,600000,2025-Q4,150000.0,0.0,25.0,25.0,,,stable
+phoenix-line,Phoenix Production Line,200000,2025-Q4,150000.0,10000.0,75.0,85.0,2,2026-Q2,COLLISION WARNING
+seattle-ops,Seattle Logistics & Warehouse,1200000,2025-Q4,100000.0,0.0,8.3,8.3,,,stable

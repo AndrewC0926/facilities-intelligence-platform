@@ -1,0 +1,7 @@
+# Runtime: the whole platform uses the Python stdlib (sqlite3, csv) plus Streamlit
+# for the local dashboard. pandas comes in as a Streamlit dependency.
+streamlit>=1.30
+pandas>=2.0
+
+# Dev / test
+pytest>=8.0

@@ -1,0 +1,14 @@
+# The SQLite database is a binary build artifact — always rebuilt by `make pipeline`.
+fip.db
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# NOTE: seeds/, tableau_export/, and RECONCILIATION.md ARE committed on purpose —
+# they make the repo self-demonstrating (the dirty acquired-site data and the
+# reconciliation report tell the story without needing to run anything).

@@ -1,0 +1,3 @@
+facility_code,facility_name,loc_region,gross_sq_ft,workstations,annual_rent,op_ex,currency,lease_kind
+QNTC,Quantico Acq.,Mid-Atlantic,,,"$1,200,000","$340,000",USD,leased
+quantico,Quantico Acquisition,Mid-Atlantic,145000,850,"1,500,000","410,000",CAD,leased

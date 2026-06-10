@@ -1,0 +1,9 @@
+site_id,site_name,region,site_type,status,sq_ft,lease_type,total_annual_cost_usd,cost_per_sqft_usd
+costa-mesa,Costa Mesa HQ & Flagship Factory,West,factory,operational,5000000,owned,18500000.0,3.7
+atlanta-campus,Atlanta Innovation Campus,Southeast,campus,buildout,,owned,51000000.0,
+austin-fab,Austin Fabrication,Central,factory,operational,800000,leased,8300000.0,10.38
+huntsville,Huntsville Integration,Southeast,factory,operational,600000,leased,6500000.0,10.83
+boston-rd,Boston R&D Lab,Northeast,office,operational,60000,leased,3000000.0,50.0
+seattle-ops,Seattle Logistics & Warehouse,West,warehouse,operational,1200000,leased,4500000.0,3.75
+phoenix-line,Phoenix Production Line,West,factory,operational,200000,leased,4000000.0,20.0
+quantico-acq,Quantico Acq.,Mid-Atlantic,factory,acquired,145000,leased,1540000.0,10.62
