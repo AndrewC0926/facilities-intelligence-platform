@@ -333,3 +333,184 @@ CREATE VIEW vw_reconciliation_status AS
 SELECT
     (SELECT COUNT(*) FROM sites WHERE source_system = 'acquired_import') AS acquired_sites,
     (SELECT COUNT(*) FROM etl_exceptions)                                AS open_exceptions;
+
+
+-- =============================================================================
+-- PHASE 2 — WORKFLOW LAYER
+-- The views below turn analytics into a workflow: trackable actions, a lease-cliff
+-- calendar, and a composite site-health score. Same rule as everything above —
+-- all business logic lives here in plain SQL, never in the dashboard.
+-- =============================================================================
+
+
+-- -----------------------------------------------------------------------------
+-- vw_open_actions
+-- -----------------------------------------------------------------------------
+-- BUSINESS QUESTION : "What insights have become work that someone owns, and what
+--                      is still open?"
+-- WHO ASKS          : VP Facilities, the exec brief, every site GM.
+-- REFRESH CADENCE   : Live (writes land in the actions table directly).
+-- NOTE              : Age-banding (green/yellow/red) is time-relative, so it lives
+--                     in fip/actions.py (with an injectable "today") rather than
+--                     here — this view just exposes the open items and their dates.
+-- -----------------------------------------------------------------------------
+DROP VIEW IF EXISTS vw_open_actions;
+CREATE VIEW vw_open_actions AS
+SELECT
+    a.action_id,
+    a.site_id,
+    COALESCE(s.site_name, '(no canonical site)')  AS site_name,
+    a.source,
+    a.title,
+    a.owner,
+    a.due_date,
+    a.status,
+    a.created_at
+FROM actions a
+LEFT JOIN sites s ON s.site_id = a.site_id
+WHERE a.status IN ('open', 'in_progress')
+ORDER BY a.created_at;
+
+
+-- -----------------------------------------------------------------------------
+-- vw_lease_cliff   ★ the "decide before two walls converge" view ★
+-- -----------------------------------------------------------------------------
+-- BUSINESS QUESTION : "For each site, how much runway is there between the lease
+--                      option deadline (when we must commit to renew/expand) and
+--                      the quarter demand outgrows the building? If that window is
+--                      short, the real-estate decision and the capacity decision
+--                      collide."
+-- WHO ASKS          : VP Facilities, CFO / real-estate, Special Projects.
+-- REFRESH CADENCE   : Weekly (rides the collision feed + lease calendar).
+-- METHOD            : Map the binding breach quarter ('YYYY-Qn') to the first day
+--                     of that quarter, then decision_window_days = that date minus
+--                     the lease option deadline. < 180 days => AT RISK (you'd be
+--                     committing to a lease before you know if the site fits).
+-- -----------------------------------------------------------------------------
+DROP VIEW IF EXISTS vw_lease_cliff;
+CREATE VIEW vw_lease_cliff AS
+WITH cliff AS (
+    SELECT
+        s.site_id,
+        s.site_name,
+        s.lease_expiration_date,
+        s.lease_option_deadline,
+        c.binding_constraint,
+        c.binding_breach_quarter,
+        -- first day of the binding breach quarter: month = (q-1)*3 + 1
+        CASE WHEN c.binding_breach_quarter IS NULL THEN NULL
+             ELSE substr(c.binding_breach_quarter, 1, 4) || '-'
+                  || substr('0' || ((CAST(substr(c.binding_breach_quarter, 7, 1) AS INTEGER) - 1) * 3 + 1), -2)
+                  || '-01'
+        END AS breach_date
+    FROM sites s
+    LEFT JOIN vw_capacity_collision c ON c.site_id = s.site_id
+)
+SELECT
+    site_id,
+    site_name,
+    lease_expiration_date,
+    lease_option_deadline,
+    binding_constraint,
+    binding_breach_quarter,
+    breach_date,
+    CASE WHEN lease_option_deadline IS NULL OR breach_date IS NULL THEN NULL
+         ELSE CAST(julianday(breach_date) - julianday(lease_option_deadline) AS INTEGER)
+    END AS decision_window_days,
+    CASE
+        WHEN lease_option_deadline IS NULL THEN 'no lease cliff'
+        WHEN breach_date IS NULL           THEN 'no breach projected'
+        WHEN CAST(julianday(breach_date) - julianday(lease_option_deadline) AS INTEGER) < 180
+                                           THEN 'AT RISK'
+        ELSE 'ok'
+    END AS cliff_status
+FROM cliff;
+
+
+-- -----------------------------------------------------------------------------
+-- vw_site_health   ★ one number per site, with its four drivers ★
+-- -----------------------------------------------------------------------------
+-- BUSINESS QUESTION : "If I could see one health score per site — and what's
+--                      dragging it down — which sites need attention?"
+-- WHO ASKS          : VP Facilities, COO, site GMs.
+-- REFRESH CADENCE   : Weekly (rides quality + capacity + cost feeds).
+-- METHOD            : Composite 0-100 = the simple average of four equally-weighted
+--                     components, each scored 0-100:
+--                       1. capacity headroom = 100 - tightest utilization (floor or power)
+--                       2. quality           = 100 - (12*open issues + 8*critical-open), floored at 0
+--                       3. cost efficiency   = 100 at/below the portfolio MEDIAN $/sqft,
+--                                              penalized above it (proportional to median)
+--                       4. data completeness = non-null critical fields / 5 * 100, where the
+--                                              critical fields are sq_ft, seat_capacity,
+--                                              power_kw_capacity, region, site_type
+--                     A component with no data (e.g. unknown utilization or cost)
+--                     scores 0 — you can't credit headroom you can't see.
+-- -----------------------------------------------------------------------------
+DROP VIEW IF EXISTS vw_site_health;
+CREATE VIEW vw_site_health AS
+WITH med AS (
+    -- portfolio median $/sqft (avg of the middle one/two of the non-null costs)
+    SELECT AVG(cost_per_sqft_usd) AS median_cost FROM (
+        SELECT cost_per_sqft_usd
+        FROM vw_cost_per_sqft
+        WHERE cost_per_sqft_usd IS NOT NULL
+        ORDER BY cost_per_sqft_usd
+        LIMIT 2 - (SELECT COUNT(*) FROM vw_cost_per_sqft WHERE cost_per_sqft_usd IS NOT NULL) % 2
+        OFFSET (SELECT (COUNT(*) - 1) / 2 FROM vw_cost_per_sqft WHERE cost_per_sqft_usd IS NOT NULL)
+    )
+),
+quality AS (
+    SELECT site_id,
+           SUM(open_count)     AS open_issues,
+           SUM(critical_count) AS critical_open
+    FROM vw_quality_by_site_quarter
+    GROUP BY site_id
+),
+util AS (
+    -- tightest utilization (whichever constraint is closer to its wall)
+    SELECT site_id, MAX(COALESCE(current_util_pct, 0), COALESCE(power_util_pct, 0)) AS tightest_util,
+           (current_util_pct IS NULL AND power_util_pct IS NULL) AS util_unknown
+    FROM vw_capacity_collision
+),
+comp AS (
+    SELECT
+        s.site_id,
+        s.site_name,
+        s.region,
+        -- 1. capacity headroom (0 if utilization is unknown)
+        CASE WHEN u.site_id IS NULL OR u.util_unknown THEN 0
+             ELSE MAX(0.0, MIN(100.0, 100.0 - u.tightest_util)) END           AS capacity_score,
+        -- 2. quality (no issues -> 100)
+        MAX(0.0, 100.0 - (12.0 * COALESCE(q.open_issues, 0)
+                          + 8.0 * COALESCE(q.critical_open, 0)))               AS quality_score,
+        -- 3. cost efficiency vs portfolio median (0 if cost unknown)
+        CASE
+            WHEN cps.cost_per_sqft_usd IS NULL OR m.median_cost IS NULL THEN 0
+            WHEN cps.cost_per_sqft_usd <= m.median_cost THEN 100.0
+            ELSE MAX(0.0, 100.0 - 100.0 * (cps.cost_per_sqft_usd - m.median_cost) / m.median_cost)
+        END                                                                   AS cost_score,
+        -- 4. data completeness over 5 critical fields
+        20.0 * (
+            (s.sq_ft IS NOT NULL)
+          + (s.seat_capacity IS NOT NULL)
+          + (s.power_kw_capacity IS NOT NULL)
+          + (s.region IS NOT NULL)
+          + (s.site_type IS NOT NULL)
+        )                                                                     AS completeness_score
+    FROM sites s
+    CROSS JOIN med m
+    LEFT JOIN quality q   ON q.site_id   = s.site_id
+    LEFT JOIN util u      ON u.site_id   = s.site_id
+    LEFT JOIN vw_cost_per_sqft cps ON cps.site_id = s.site_id
+)
+SELECT
+    site_id,
+    site_name,
+    region,
+    ROUND(capacity_score, 1)     AS capacity_score,
+    ROUND(quality_score, 1)      AS quality_score,
+    ROUND(cost_score, 1)         AS cost_score,
+    ROUND(completeness_score, 1) AS completeness_score,
+    ROUND((capacity_score + quality_score + cost_score + completeness_score) / 4.0, 1)
+                                 AS health_score
+FROM comp;

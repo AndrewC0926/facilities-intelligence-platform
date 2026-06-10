@@ -94,20 +94,21 @@ WHERE  collision_status = 'COLLISION WARNING';
 
 ---
 
-## The data model (5 tables)
+## The data model (6 tables)
 
 | Table | System of record | What it holds |
 |---|---|---|
-| `sites` | canonical registry | one row per facility (sq ft, seats, type, status, provenance) |
+| `sites` | canonical registry | one row per facility (sq ft, seats, **power kW**, type, status, **lease dates**, provenance) |
 | `leases` | real-estate / finance | annual rent + opex → drives $/sq ft |
 | `headcount_snapshots` | **HRIS** | assigned headcount per site/program/quarter |
-| `production_demand` | **MRP** | planned units × sq ft/unit → demanded floor space |
+| `production_demand` | **MRP** | planned units × sq ft/unit **and × kW/unit** → demanded floor space + power |
 | `quality_issues` | **ERP/CMMS** + intake form | quality/safety/facility issues, severity, status |
+| `actions` | workflow layer | owned, dated tasks generated from insights (collision / reconciliation / quality) |
 
 See [`sql/schema.sql`](sql/schema.sql) for the full definitions and `etl_exceptions`,
 the quarantine table where un-reconcilable rows go (nothing is silently dropped).
 
-## The semantic layer (5 views — the product)
+## The semantic layer (the product)
 
 | View | Answers |
 |---|---|
@@ -117,6 +118,36 @@ the quarantine table where un-reconcilable rows go (nothing is silently dropped)
 | `vw_capacity_vs_demand` | MRP-demanded floor space **and power** vs. what the building has |
 | `vw_capacity_collision` | **Which sites hit the wall, on which constraint, and in which quarter** ★ |
 | `vw_reconciliation_status` | How many sites folded in, how many exceptions still open |
+| `vw_open_actions` | What insights became owned, dated work — and what's still open |
+| `vw_lease_cliff` | Where the lease option deadline and the capacity breach collide |
+| `vw_site_health` | One composite 0–100 health score per site, with its four drivers |
+
+---
+
+## Workflow layer (Phase 2 — reporting → deciding → *doing*)
+
+Four features turn the analytics into a tracked workflow:
+
+1. **Actions table.** Every insight that needs a human becomes a trackable, **owned,
+   dated** row in `actions` (source = collision / reconciliation / quality). The
+   Actions tab color-codes open items by age (🟢 <30d · 🟡 30–60d · 🔴 >60d); the
+   age logic lives in [`fip/actions.py`](fip/actions.py) with an injectable `today`
+   so the seed stays deterministic.
+2. **Lease cliff calendar.** `vw_lease_cliff` maps each site's binding breach quarter
+   to a date and computes `decision_window_days` between the lease **option deadline**
+   and that breach. `< 180 days ⇒ AT RISK` — Phoenix's option deadline is set 60 days
+   before its 2026-Q1 power breach, so the real-estate and capacity decisions collide.
+3. **Site health score.** `vw_site_health` is a composite 0–100, the equal-weight
+   average of capacity headroom, quality, cost efficiency (vs the portfolio **median**
+   $/sqft, computed in SQL), and data completeness. The scorecard ranks sites and
+   expands to show each component.
+4. **Stakeholder alert draft.** When a collision warning or a lease-cliff AT RISK flag
+   is live, one button drafts a structured, **copy-paste** heads-up (site, risk type,
+   binding constraint, decision needed, owner, deadline, recommended action) via
+   [`fip/notify.py`](fip/notify.py). It sends nothing — a human decides who gets it.
+
+The exec brief ([`python -m fip.brief`](fip/brief.py)) now also reports the open-actions
+count and the oldest unresolved item's age.
 
 ---
 
@@ -200,8 +231,9 @@ resolutions, and the queue of items needing a decision.
 ## Tests
 
 ```bash
-make test     # 25 tests: ETL cleaning, view correctness, the dated collision warning,
-              # multi-constraint binding logic, the scenario layer, and the exec brief
+make test     # 46 tests: ETL cleaning, view correctness, the dated collision warning,
+              # multi-constraint binding logic, the scenario layer, the exec brief,
+              # plus the workflow layer (actions/age, lease cliff, site health, alerts)
 ```
 
 ## Layout
@@ -211,9 +243,11 @@ sql/        schema.sql · views.sql            ← the model and the product
 fip/        seed.py etl.py reconcile.py        ← build + reconcile
             db.py pipeline.py export.py ask.py
             scenario.py brief.py               ← decision-support logic (scenarios + brief)
+            actions.py notify.py               ← workflow logic (action age + stakeholder alerts)
 app/        dashboard.py                        ← Streamlit delivery layer
 seeds/      *.csv  (generated source exports)
 tableau_export/  *.csv  (generated per-view extracts)
 tests/      test_etl.py test_views.py test_detector.py
             test_binding.py test_brief.py
+            test_actions.py test_lease_cliff.py test_health.py test_notify.py
 ```

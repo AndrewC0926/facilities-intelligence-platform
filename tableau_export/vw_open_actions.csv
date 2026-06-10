@@ -1,0 +1,5 @@
+action_id,site_id,site_name,source,title,owner,due_date,status,created_at
+1,phoenix-line,Phoenix Production Line,collision,Phoenix POWER breach 2026-Q1 — decide: electrical upgrade vs. shift Anvil line,VP Facilities,2026-06-30,open,2026-03-15
+2,quantico-acq,Quantico Acq.,reconciliation,Sign off quantico-acq lease: USD $1.2M (kept) vs CAD $1.5M row,Lease Admin,2026-06-20,open,2026-04-25
+3,,(no canonical site),reconciliation,Resolve orphan quality record for unknown site 'tucson-line',Data Steward,2026-06-18,in_progress,2026-04-30
+4,huntsville,Huntsville Integration,quality,Huntsville recurring equipment failures — root-cause the scrap-rate trend,Quality Director,2026-07-15,open,2026-05-20
