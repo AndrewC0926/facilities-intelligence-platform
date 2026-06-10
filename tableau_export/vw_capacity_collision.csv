@@ -1,8 +1,8 @@
-site_id,site_name,available_sqft,latest_quarter,latest_demanded_sqft,growth_sqft_per_quarter,current_util_pct,projected_util_2q_pct,quarters_to_wall,projected_breach_quarter,collision_status
-atlanta-campus,Atlanta Innovation Campus,,2025-Q4,80000.0,40000.0,,,,,unknown — capacity data pending
-austin-fab,Austin Fabrication,800000,2025-Q4,300000.0,0.0,37.5,37.5,,,stable
-boston-rd,Boston R&D Lab,60000,2025-Q4,10000.0,0.0,16.7,16.7,,,stable
-costa-mesa,Costa Mesa HQ & Flagship Factory,5000000,2025-Q4,1200000.0,0.0,24.0,24.0,,,stable
-huntsville,Huntsville Integration,600000,2025-Q4,150000.0,0.0,25.0,25.0,,,stable
-phoenix-line,Phoenix Production Line,200000,2025-Q4,150000.0,10000.0,75.0,85.0,2,2026-Q2,COLLISION WARNING
-seattle-ops,Seattle Logistics & Warehouse,1200000,2025-Q4,100000.0,0.0,8.3,8.3,,,stable
+site_id,site_name,region,available_sqft,latest_quarter,latest_demanded_sqft,growth_sqft_per_quarter,current_util_pct,projected_util_2q_pct,quarters_to_wall,projected_breach_quarter,collision_status,available_kw,latest_demanded_kw,growth_kw_per_quarter,power_util_pct,projected_power_util_2q_pct,power_quarters_to_wall,power_breach_quarter,power_status,binding_constraint,binding_quarters_to_wall,binding_breach_quarter,binding_status
+atlanta-campus,Atlanta Innovation Campus,Southeast,,2025-Q4,80000.0,40000.0,,,,,unknown — capacity data pending,,6000.0,3000.0,,,,,unknown — capacity data pending,none,,,unknown — capacity data pending
+austin-fab,Austin Fabrication,Central,800000,2025-Q4,300000.0,0.0,37.5,37.5,,,stable,20000,7500.0,0.0,37.5,37.5,,,stable,none,,,stable
+boston-rd,Boston R&D Lab,Northeast,60000,2025-Q4,10000.0,0.0,16.7,16.7,,,stable,1500,500.0,0.0,33.3,33.3,,,stable,none,,,stable
+costa-mesa,Costa Mesa HQ & Flagship Factory,West,5000000,2025-Q4,1200000.0,0.0,24.0,24.0,,,stable,60000,12000.0,0.0,20.0,20.0,,,stable,none,,,stable
+huntsville,Huntsville Integration,Southeast,600000,2025-Q4,150000.0,0.0,25.0,25.0,,,stable,15000,6000.0,0.0,40.0,40.0,,,stable,none,,,stable
+phoenix-line,Phoenix Production Line,West,200000,2025-Q4,150000.0,10000.0,75.0,85.0,2,2026-Q2,COLLISION WARNING,4800,3900.0,260.0,81.3,92.1,1,2026-Q1,COLLISION WARNING,power,1,2026-Q1,COLLISION WARNING
+seattle-ops,Seattle Logistics & Warehouse,West,1200000,2025-Q4,100000.0,0.0,8.3,8.3,,,stable,8000,2000.0,0.0,25.0,25.0,,,stable,none,,,stable

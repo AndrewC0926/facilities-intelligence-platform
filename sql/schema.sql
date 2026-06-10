@@ -26,14 +26,15 @@ DROP TABLE IF EXISTS sites;
 -- agrees on; source_system records provenance so an acquired site that was
 -- reconciled in is distinguishable from a clean canonical record.
 CREATE TABLE sites (
-    site_id        TEXT PRIMARY KEY,          -- e.g. 'costa-mesa'
-    site_name      TEXT NOT NULL,             -- 'Costa Mesa HQ & Flagship Factory'
-    region         TEXT,                      -- 'West' | 'Central' | 'Southeast'
-    sq_ft          INTEGER,                   -- gross square feet (NULL = unknown, e.g. mid-buildout)
-    seat_capacity  INTEGER,                   -- desks/stations the building supports
-    site_type      TEXT,                      -- 'factory' | 'campus' | 'office' | 'warehouse'
-    status         TEXT,                      -- 'operational' | 'buildout' | 'acquired'
-    source_system  TEXT NOT NULL DEFAULT 'canonical'  -- 'canonical' | 'acquired_import'
+    site_id            TEXT PRIMARY KEY,      -- e.g. 'costa-mesa'
+    site_name          TEXT NOT NULL,         -- 'Costa Mesa HQ & Flagship Factory'
+    region             TEXT,                  -- 'West' | 'Central' | 'Southeast'
+    sq_ft              INTEGER,               -- gross square feet (NULL = unknown, e.g. mid-buildout)
+    seat_capacity      INTEGER,               -- desks/stations the building supports
+    power_kw_capacity  INTEGER,               -- electrical service ceiling, kW (NULL = unknown, e.g. mid-buildout)
+    site_type          TEXT,                  -- 'factory' | 'campus' | 'office' | 'warehouse'
+    status             TEXT,                  -- 'operational' | 'buildout' | 'acquired'
+    source_system      TEXT NOT NULL DEFAULT 'canonical'  -- 'canonical' | 'acquired_import'
 );
 
 -- Cost layer. $/sq ft is derived downstream from (annual_rent + opex) / sq_ft.
@@ -56,15 +57,18 @@ CREATE TABLE headcount_snapshots (
     headcount    INTEGER NOT NULL
 );
 
--- MRP demand: planned production that consumes floor space. Demanded sq ft =
--- units_planned * sqft_per_unit. This table drives the capacity-collision detector.
+-- MRP demand: planned production that consumes BOTH floor space and electrical
+-- power. Demanded sq ft = units_planned * sqft_per_unit; demanded kW =
+-- units_planned * kw_per_unit. This table drives the multi-constraint collision
+-- detector — a site can hit its power ceiling before it runs out of floor space.
 CREATE TABLE production_demand (
     demand_id      INTEGER PRIMARY KEY,
     site_id        TEXT NOT NULL REFERENCES sites(site_id),
     quarter        TEXT NOT NULL,             -- 'YYYY-Qn'
     program        TEXT NOT NULL,
     units_planned  INTEGER NOT NULL,
-    sqft_per_unit  REAL NOT NULL              -- floor space one unit's line/cell consumes
+    sqft_per_unit  REAL NOT NULL,             -- floor space one unit's line/cell consumes
+    kw_per_unit    REAL NOT NULL DEFAULT 0    -- electrical load one unit's line/cell draws, kW
 );
 
 -- ERP/CMMS quality issues + anything submitted via the 30-second intake form.

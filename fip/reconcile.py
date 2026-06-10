@@ -37,7 +37,7 @@ def write_report(conn, report, path=REPORT_PATH):
         a("| field | value |")
         a("|---|---|")
         for k in ("site_id", "site_name", "region", "sq_ft", "seat_capacity",
-                  "site_type", "status", "source_system"):
+                  "power_kw_capacity", "site_type", "status", "source_system"):
             a(f"| {k} | {s[k]} |")
         a("")
 

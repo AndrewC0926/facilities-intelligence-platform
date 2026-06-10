@@ -11,6 +11,7 @@ the portfolio" function).
 
 Run:  streamlit run app/dashboard.py
 """
+import datetime
 import os
 import sys
 
@@ -18,13 +19,22 @@ import pandas as pd
 import streamlit as st
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from fip import db  # noqa: E402
+from fip import brief, db, scenario  # noqa: E402  -- presentation calls into the logic layer
 
 
 def load(view_or_sql):
     conn = db.connect()
     try:
         return pd.DataFrame(db.query(conn, view_or_sql))
+    finally:
+        conn.close()
+
+
+def load_rows(view_or_sql):
+    """Raw dict rows (what the SQL views return) for the pure scenario layer."""
+    conn = db.connect()
+    try:
+        return db.query(conn, view_or_sql)
     finally:
         conn.close()
 
@@ -43,23 +53,62 @@ if not os.path.exists(db.DB_PATH):
         pipeline.run()
     st.toast("Pipeline complete. Database built from source exports.", icon="✅")
 
+# --- Scenario controls (sidebar) ----------------------------------------------
+# Per-site growth multiplier. All math lives in fip.scenario; the sidebar only
+# collects the inputs and the body only renders the outputs.
+base_collision = load_rows("SELECT * FROM vw_capacity_collision")
+st.sidebar.header("🎛️ Scenario modeling")
+st.sidebar.caption("Scale each site's demand growth. The multiplier hits BOTH the "
+                   "floor and power trend, so the breach quarter — and which ceiling "
+                   "binds — moves live.")
+multipliers = {}
+for r in sorted(base_collision, key=lambda r: r["site_name"]):
+    multipliers[r["site_id"]] = st.sidebar.slider(
+        r["site_name"], 0.0, 3.0, 1.0, 0.25, key=f"mult_{r['site_id']}")
+if any(m != 1.0 for m in multipliers.values()):
+    st.sidebar.info("Scenario active — figures below reflect your multipliers, "
+                    "not the baseline plan.")
+
+scenario_rows = scenario.apply(base_collision, multipliers)
+
 # --- Collision detector: the headline alert -----------------------------------
 st.header("⚠️ Capacity Collision Detector")
-st.caption("Source view: `vw_capacity_collision` — projects MRP demand growth and "
-           "warns ~2 quarters before a site hits the wall.")
-collision = load("SELECT * FROM vw_capacity_collision ORDER BY projected_util_2q_pct DESC")
-warnings = collision[collision["collision_status"].isin(["COLLISION WARNING", "AT THE WALL NOW"])]
-if not warnings.empty:
-    for _, r in warnings.iterrows():
+st.caption("Source view: `vw_capacity_collision` (+ `fip.scenario`) — projects MRP "
+           "demand growth on TWO ceilings (floor sq ft and power kW) and warns ~2 "
+           "quarters before whichever one binds first.")
+warnings = sorted(
+    [r for r in scenario_rows if r["binding_status"] in ("COLLISION WARNING", "AT THE WALL NOW")],
+    key=lambda r: r["binding_quarters_to_wall"])
+if warnings:
+    for r in warnings:
+        mult = "" if r["growth_multiplier"] == 1.0 else f" (growth ×{r['growth_multiplier']:g})"
         st.error(
-            f"**{r['site_name']}** — {r['collision_status']}. "
-            f"Demand is growing ~{int(r['growth_sqft_per_quarter']):,} sq ft/quarter and is "
-            f"projected to cross 85% of the building in **{r['projected_breach_quarter']}**. "
-            f"Current floor utilization {r['current_util_pct']}% → "
-            f"{r['projected_util_2q_pct']}% in two quarters.")
+            f"**{r['site_name']}** — binding constraint **{r['binding_constraint'].upper()}**, "
+            f"{r['binding_status']}{mult}. Projected to cross 85% of its "
+            f"{r['binding_constraint']} ceiling in **{r['binding_breach_quarter']}**. "
+            f"Floor utilization {r['current_util_pct']}% · "
+            f"power utilization {r['power_util_pct']}%.")
+        rec = scenario.recommend_relocation(scenario_rows, r["site_id"])
+        if rec:
+            where = "same region" if rec["same_region"] else f"{rec['region']} region"
+            st.info(
+                f"↳ **Relocation candidate: {rec['site_name']}** ({where}) — "
+                f"{rec['slack']:,} {rec['unit']} of slack below its wall, enough to absorb "
+                f"the ~{rec['overflow']:,} {rec['unit']} of {r['site_name']} overflow.")
 else:
-    st.success("No imminent capacity collisions.")
-st.dataframe(collision, use_container_width=True, hide_index=True)
+    st.success("No imminent capacity collisions at the current scenario.")
+st.dataframe(pd.DataFrame(scenario_rows), use_container_width=True, hide_index=True)
+
+# --- Exec brief generator -----------------------------------------------------
+st.header("📄 Executive brief")
+st.caption("A dated one-pager built from the live views (same content as "
+           "`python -m fip.brief`), reflecting the current scenario.")
+if st.button("Generate exec brief"):
+    md = brief.render(multipliers=multipliers)
+    st.download_button("⬇️ Download brief (.md)", md,
+                       file_name=f"fip-exec-brief-{datetime.date.today().isoformat()}.md",
+                       mime="text/markdown")
+    st.markdown(md)
 
 # --- Three exec questions, side by side ---------------------------------------
 c1, c2 = st.columns(2)

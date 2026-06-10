@@ -114,8 +114,41 @@ the quarantine table where un-reconcilable rows go (nothing is silently dropped)
 | `vw_quality_by_site_quarter` | Which sites have quality problems, trending how? |
 | `vw_cost_per_sqft` | All-in cost per square foot, per site (null-safe for buildouts) |
 | `vw_headcount_vs_seats` | Over capacity vs. paying for empty seats |
-| `vw_capacity_vs_demand` | MRP-demanded floor space vs. what the building has |
-| `vw_capacity_collision` | **Which sites hit the wall, and in which quarter** ★ |
+| `vw_capacity_vs_demand` | MRP-demanded floor space **and power** vs. what the building has |
+| `vw_capacity_collision` | **Which sites hit the wall, on which constraint, and in which quarter** ★ |
+| `vw_reconciliation_status` | How many sites folded in, how many exceptions still open |
+
+---
+
+## Decision support (reporting → deciding)
+
+Three features turn the platform from "here's what's happening" into "here's what to do":
+
+1. **Scenario modeling.** A per-site growth-multiplier slider (0×–3×) in the sidebar
+   re-projects demand on top of the trend the collision view computes. The multiplier
+   scales **both** the floor-sqft and power-kW growth, so the projected breach quarter
+   moves live and a site flips between *no collision* and a binding constraint as growth
+   crosses the wall. Below each warning, FIP recommends the best **relocation candidate** —
+   a site with enough slack on the binding constraint, preferring the same or an adjacent
+   region. All of this math lives in [`fip/scenario.py`](fip/scenario.py); the dashboard
+   only collects slider inputs and renders.
+
+2. **Multi-constraint capacity.** Every site now carries a `power_kw_capacity`, and MRP
+   demand carries `kw_per_unit`, so `vw_capacity_collision` projects **two** ceilings —
+   floor square footage and electrical power — and reports the **binding** one (whichever
+   is hit first, and when). Phoenix is tuned so at 1× it breaches **POWER in 2026-Q1**,
+   one quarter *before* its floor space runs out in 2026-Q2 — the whole point: the cheap
+   constraint to miss is the one you weren't watching.
+
+3. **Exec brief generator.** One button renders a dated one-page Markdown brief from the
+   live views — headline risk, the binding-constraint forecast table, the acquisition
+   reconciliation status with its open-exceptions count, and recommended actions
+   (including the relocation option). Download it as `.md`, or run it headless:
+
+   ```bash
+   python -m fip.brief                 # print the dated brief
+   python -m fip.brief --out brief.md  # write it to a file
+   ```
 
 ## Scrappy → scalable: `ask.py`
 
@@ -167,7 +200,8 @@ resolutions, and the queue of items needing a decision.
 ## Tests
 
 ```bash
-make test     # 12 tests: ETL cleaning, view correctness, the dated collision warning
+make test     # 25 tests: ETL cleaning, view correctness, the dated collision warning,
+              # multi-constraint binding logic, the scenario layer, and the exec brief
 ```
 
 ## Layout
@@ -176,8 +210,10 @@ make test     # 12 tests: ETL cleaning, view correctness, the dated collision wa
 sql/        schema.sql · views.sql            ← the model and the product
 fip/        seed.py etl.py reconcile.py        ← build + reconcile
             db.py pipeline.py export.py ask.py
+            scenario.py brief.py               ← decision-support logic (scenarios + brief)
 app/        dashboard.py                        ← Streamlit delivery layer
 seeds/      *.csv  (generated source exports)
 tableau_export/  *.csv  (generated per-view extracts)
 tests/      test_etl.py test_views.py test_detector.py
+            test_binding.py test_brief.py
 ```

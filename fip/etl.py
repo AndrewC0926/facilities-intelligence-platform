@@ -92,9 +92,10 @@ def load_sites(conn, report):
     canonical quantico-acq site + lease."""
     for r in _read_csv("sites_master.csv"):
         conn.execute(
-            "INSERT INTO sites VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT INTO sites VALUES (?,?,?,?,?,?,?,?,?)",
             (r["site_id"], r["site_name"], r["region"],
              parse_int(r["sq_ft"]), parse_int(r["seat_capacity"]),
+             parse_int(r["power_kw_capacity"]),
              r["site_type"], r["status"], r["source_system"]),
         )
 
@@ -116,9 +117,13 @@ def load_sites(conn, report):
             report["actions"].append(
                 f"CAD amounts on '{r['facility_code']}' flagged for review "
                 f"(converted at {CAD_TO_USD} for reference only)")
-            # we prefer the USD-denominated row as authoritative; record the conflict
-            report["conflicts"].append(
-                "quantico-acq lease: USD row ($1,200,000) vs CAD row "
+            # We prefer the USD-denominated row as authoritative and QUARANTINE the
+            # CAD row to the exceptions queue: a human must sign off on the rent the
+            # platform should carry. Persisted to etl_exceptions so the exec brief
+            # and reconciliation report read the same live count.
+            _quarantine(
+                conn, report, "acquired_site_dump.csv", dict(r),
+                "currency/value conflict: USD row ($1,200,000) vs CAD row "
                 "($1,500,000 ~= ${:,.0f}); kept USD, CAD row needs human sign-off"
                 .format((rent or 0) * CAD_TO_USD))
         elif rent_usd is None:
@@ -128,9 +133,10 @@ def load_sites(conn, report):
             f"quantico-acq sq_ft/seats backfilled from sibling row ({sq_ft} sq ft, {seats} seats)")
 
     conn.execute(
-        "INSERT INTO sites VALUES (?,?,?,?,?,?,?,?)",
+        "INSERT INTO sites VALUES (?,?,?,?,?,?,?,?,?)",
         ("quantico-acq", name or "Quantico Acquisition", region or "Mid-Atlantic",
-         sq_ft, seats, "factory", "acquired", "acquired_import"),
+         sq_ft, seats, None,                    # power capacity not in the acquired dump
+         "factory", "acquired", "acquired_import"),
     )
     conn.execute(
         "INSERT INTO leases (site_id, annual_rent_usd, opex_usd_yr, start_date, end_date, lease_type) "
@@ -190,9 +196,10 @@ def load_demand(conn, known, report):
                         f"unknown site code '{r['site_id']}'")
             continue
         out.append((site, to_quarter(r["quarter"]), r["program"],
-                    int(r["units_planned"]), float(r["sqft_per_unit"])))
+                    int(r["units_planned"]), float(r["sqft_per_unit"]),
+                    float(r.get("kw_per_unit") or 0)))
     for i, row in enumerate(out, start=1):
-        conn.execute("INSERT INTO production_demand VALUES (?,?,?,?,?,?)", (i, *row))
+        conn.execute("INSERT INTO production_demand VALUES (?,?,?,?,?,?,?)", (i, *row))
 
 
 def load_quality(conn, known, report):
