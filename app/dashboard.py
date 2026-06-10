@@ -74,9 +74,10 @@ scenario_rows = scenario.apply(base_collision, multipliers)
 today = datetime.date.today()
 cliff_rows = load_rows("SELECT * FROM vw_lease_cliff")
 
-tab_cap, tab_actions, tab_lease, tab_health, tab_quality, tab_intake = st.tabs([
-    "⚠️ Capacity & Scenario", "✅ Actions", "📅 Lease Cliff",
-    "💚 Site Health", "🧪 Quality & Cost", "📝 Report Issue"])
+(tab_cap, tab_programs, tab_actions, tab_lease, tab_health,
+ tab_recon, tab_quality, tab_intake) = st.tabs([
+    "⚠️ Capacity & Scenario", "🚀 Programs", "✅ Actions", "📅 Lease Cliff",
+    "💚 Site Health", "🔁 Reconciliation", "🧪 Quality & Cost", "📝 Report Issue"])
 
 # === Tab: Capacity & Scenario =================================================
 with tab_cap:
@@ -135,6 +136,25 @@ with tab_cap:
                            file_name=f"fip-exec-brief-{today.isoformat()}.md",
                            mime="text/markdown")
         st.markdown(md)
+
+# === Tab: Programs ============================================================
+with tab_programs:
+    st.subheader("Program ↔ facility risk")
+    st.caption("Source: `vw_program_facility_risk` — the \"so what\" of the collision "
+               "detector: when a building hits a wall, which PROGRAMS does it stop, how "
+               "far short of their unit target, and how many quarters until it bites.")
+    progs = load("SELECT * FROM vw_program_facility_risk")
+    at_risk_progs = progs[progs["binding_status"].isin(["COLLISION WARNING", "AT THE WALL NOW"])]
+    if not at_risk_progs.empty:
+        for _, r in at_risk_progs.iterrows():
+            tgt = "—" if pd.isna(r["units_per_quarter_target"]) else f"{int(r['units_per_quarter_target'])}/qtr target"
+            st.error(
+                f"**{r['program_name']}** ({r['program_type']}) at **{r['site_name']}** — "
+                f"the {r['binding_constraint']} ceiling binds in **{r['binding_breach_quarter']}** "
+                f"({int(r['quarters_to_constraint'])} quarter(s) out), capping a {tgt}.")
+    else:
+        st.success("No programs sit behind an imminent facilities constraint.")
+    st.dataframe(progs, use_container_width=True, hide_index=True)
 
 # === Tab: Actions =============================================================
 with tab_actions:
@@ -200,6 +220,31 @@ with tab_health:
             b2.metric("Quality", r["quality_score"])
             b3.metric("Cost efficiency", r["cost_score"])
             b4.metric("Data completeness", r["completeness_score"])
+
+# === Tab: Reconciliation ======================================================
+with tab_recon:
+    st.subheader("Acquisition reconciliation & integration pipeline")
+    st.caption("Sources: `vw_reconciliation_status`, `etl_exceptions`, `vw_integration_pipeline`. "
+               "Dirty acquired data is reconciled where safe; the rest waits in an exceptions "
+               "queue, and the integration of newer sites is tracked to completion.")
+    recon = load_rows("SELECT * FROM vw_reconciliation_status")[0]
+    pipeline = load("SELECT * FROM vw_integration_pipeline")
+    integrating = int((pipeline["site_status"] == "acquired_integrating").sum())
+    below_80 = int((pipeline["completeness_pct"] < 80).sum())
+    stalled = int(pipeline["stalled_flag"].sum())
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Acquired (reconciled)", recon["acquired_sites"])
+    m2.metric("Open exceptions", recon["open_exceptions"])
+    m3.metric("In active integration", integrating)
+    m4.metric("Below 80% complete", below_80)
+    st.markdown(f"**Integration pipeline summary:** {integrating} site(s) in active "
+                f"integration, {below_80} below 80% data completeness"
+                + (f", **{stalled} stalled** (>12 mo)" if stalled else "") + ".")
+    exceptions = load("SELECT source_file, reason FROM etl_exceptions ORDER BY exception_id")
+    st.markdown("**Exceptions queue — awaiting a human decision:**")
+    st.dataframe(exceptions, use_container_width=True, hide_index=True)
+    st.markdown("**Integration pipeline (non-operational sites):**")
+    st.dataframe(pipeline, use_container_width=True, hide_index=True)
 
 # === Tab: Quality & Cost ======================================================
 with tab_quality:

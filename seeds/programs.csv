@@ -1,0 +1,9 @@
+program_name,program_type,primary_site_id,secondary_site_id,status,units_per_quarter_current,units_per_quarter_target,kw_per_unit,sqft_per_unit
+Fury CCA,autonomous_aircraft,arsenal-campus,hq-flagship,production,12,37,180,8500
+Roadrunner,munitions,arsenal-campus,,production,45,120,40,800
+Barracuda,munitions,arsenal-campus,,development,8,60,35,700
+Ghost Shark,autonomous_underwater,maritime-systems,boston-maritime,production,18,50,220,4200
+ALTIUS Series,autonomous_aircraft,composites-uav,,development,24,80,90,2600
+Bolt,munitions,arsenal-campus,,development,0,200,25,400
+SRM Supply,munitions,srm-complex,,production,480,1500,9,120
+Lattice OS,c2_software,hq-flagship,seattle-hub,production,,,,

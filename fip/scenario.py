@@ -29,9 +29,11 @@ WALL = 0.85  # you plan an expansion/upgrade before you hit 100% of a ceiling
 
 # Region adjacency for relocation preference (symmetric). Loose US geography.
 _ADJACENT = {
-    "West":         {"Central"},
-    "Central":      {"West", "Southeast", "Northeast"},
-    "Southeast":    {"Central", "Northeast", "Mid-Atlantic"},
+    "West":         {"Mountain", "Central"},
+    "Mountain":     {"West", "Central", "South"},
+    "Central":      {"West", "Mountain", "South", "Southeast", "Northeast"},
+    "South":        {"Mountain", "Central", "Southeast"},
+    "Southeast":    {"South", "Central", "Northeast", "Mid-Atlantic"},
     "Northeast":    {"Central", "Southeast", "Mid-Atlantic"},
     "Mid-Atlantic": {"Southeast", "Northeast"},
 }

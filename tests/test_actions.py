@@ -34,20 +34,20 @@ def test_open_actions_have_owner_due_date_and_band(built_db):
     assert ages == sorted(ages, reverse=True)
 
 
-def test_phoenix_breach_action_is_the_oldest_and_red(built_db):
+def test_arsenal_breach_action_is_the_oldest_and_red(built_db):
     conn, _ = built_db
     rows = {r["action_id"]: r for r in actions.open_actions(conn, TODAY)}
-    phx = rows[1]
-    assert phx["source"] == "collision"
-    assert phx["age_days"] == 87
-    assert phx["age_band"] == "red"
+    arsenal = rows[1]
+    assert arsenal["source"] == "collision"
+    assert arsenal["age_days"] == 87
+    assert arsenal["age_band"] == "red"
 
 
 def test_orphan_action_has_no_canonical_site(built_db):
     conn, _ = built_db
     rows = db.query(conn, "SELECT * FROM vw_open_actions WHERE site_id IS NULL")
     assert len(rows) == 1
-    assert "tucson-line" in rows[0]["title"]
+    assert "kona-test-range" in rows[0]["title"]
     assert rows[0]["site_name"] == "(no canonical site)"
 
 
@@ -56,7 +56,7 @@ def test_summary_reports_count_and_oldest_age(built_db):
     s = actions.summary(conn, TODAY)
     assert s["open_count"] == 4
     assert s["oldest_age_days"] == 87
-    assert s["oldest_site"] == "Phoenix Production Line"
+    assert s["oldest_site"] == "Arsenal Campus"
 
 
 def test_view_excludes_resolved_actions(built_db):

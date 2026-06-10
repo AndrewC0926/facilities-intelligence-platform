@@ -1,6 +1,6 @@
 """Exec brief generator — must render a dated one-pager from the live views with
-the headline risk, the binding-constraint forecast, the reconciliation count, and
-recommended actions."""
+the headline risk, the binding-constraint forecast, the reconciliation count, the
+integration pipeline summary, and recommended actions."""
 import datetime
 
 from fip import brief
@@ -26,7 +26,7 @@ def test_brief_is_dated(built_db):
 def test_brief_headline_names_the_binding_constraint(built_db):
     conn, _ = built_db
     md = brief.render(conn=conn, today=datetime.date(2026, 6, 10))
-    assert "Phoenix Production Line" in md
+    assert "Arsenal Campus" in md
     assert "POWER" in md
     assert "2026-Q4" in md          # the dated binding breach, not the floor 2027-Q1
 
@@ -35,15 +35,23 @@ def test_brief_reports_two_reconciliation_exceptions(built_db):
     conn, _ = built_db
     md = brief.render(conn=conn, today=datetime.date(2026, 6, 10))
     assert "**2** item(s) in the exceptions queue" in md
-    assert "tucson-line" in md       # the orphan is named
+    assert "kona-test-range" in md   # the orphan is named
     assert "CAD" in md               # the currency conflict is named
+
+
+def test_brief_includes_integration_pipeline_summary(built_db):
+    conn, _ = built_db
+    md = brief.render(conn=conn, today=datetime.date(2026, 6, 10))
+    assert "Integration pipeline:" in md
+    assert "in active integration" in md
+    assert "below 80% data completeness" in md
 
 
 def test_brief_recommends_relocation(built_db):
     conn, _ = built_db
     md = brief.render(conn=conn, today=datetime.date(2026, 6, 10))
     assert "Relocation option" in md
-    assert "Costa Mesa" in md
+    assert "HQ & Flagship Factory" in md
 
 
 def test_brief_scenario_note_appears_under_multiplier(built_db):
@@ -51,7 +59,7 @@ def test_brief_scenario_note_appears_under_multiplier(built_db):
     plain = brief.render(conn=conn, today=datetime.date(2026, 6, 10))
     assert "Scenario applied" not in plain
     scen = brief.render(conn=conn, today=datetime.date(2026, 6, 10),
-                        multipliers={"phoenix-line": 3.0})
+                        multipliers={"arsenal-campus": 3.0})
     assert "Scenario applied" in scen
 
 

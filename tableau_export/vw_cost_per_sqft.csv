@@ -1,9 +1,11 @@
 site_id,site_name,region,site_type,status,sq_ft,lease_type,total_annual_cost_usd,cost_per_sqft_usd
-costa-mesa,Costa Mesa HQ & Flagship Factory,West,factory,operational,5000000,owned,18500000.0,3.7
-atlanta-campus,Atlanta Innovation Campus,Southeast,campus,buildout,,owned,51000000.0,
-austin-fab,Austin Fabrication,Central,factory,operational,800000,leased,8300000.0,10.38
-huntsville,Huntsville Integration,Southeast,factory,operational,600000,leased,6500000.0,10.83
-boston-rd,Boston R&D Lab,Northeast,office,operational,60000,leased,3000000.0,50.0
-seattle-ops,Seattle Logistics & Warehouse,West,warehouse,operational,1200000,leased,4500000.0,3.75
-phoenix-line,Phoenix Production Line,West,factory,operational,200000,leased,4000000.0,20.0
-quantico-acq,Quantico Acq.,Mid-Atlantic,factory,acquired,145000,leased,1540000.0,10.62
+arsenal-campus,Arsenal Campus,West,factory,operational,980000,leased,19000000.0,19.39
+hq-flagship,HQ & Flagship Factory,West,factory,operational,640000,owned,12000000.0,18.75
+long-beach,Long Beach Campus,West,campus,buildout,,owned,38000000.0,
+srm-complex,Solid Rocket Motor Complex,South,factory,operational,92000,owned,5500000.0,59.78
+maritime-systems,Maritime Systems Factory,Northeast,factory,operational,140000,leased,4700000.0,33.57
+composites-uav,Composites & UAV Integration,Southeast,factory,acquired,148000,leased,4000000.0,27.03
+space-domain,Space Domain Campus,Mountain,campus,acquired,80000,leased,3400000.0,42.5
+seattle-hub,Seattle Engineering Hub,West,office,operational,95000,leased,5500000.0,57.89
+boston-maritime,Boston Maritime Engineering,Northeast,office,operational,48000,leased,3100000.0,64.58
+advanced-imaging,Advanced Imaging Facility,Southeast,factory,acquired,34000,leased,1540000.0,45.29

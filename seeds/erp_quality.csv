@@ -1,17 +1,16 @@
 site_id,quarter,category,severity,status,reported_date,description
-huntsville,2025-Q4,equipment,5,open,2025-11-11,CNC spindle failure halting line 3
-huntsville,2025-Q4,safety,4,closed,2025-12-02,Forklift near-miss in receiving
-huntsville,2026-Q1,facility,4,open,2026-02-19,Roof leak over clean assembly bay
-huntsville,2026-Q1,equipment,5,open,2026-03-04,Test chamber HVAC out of spec
-huntsville,2026-Q2,supply,3,closed,2026-05-21,Solder paste lot rejected at incoming QA
-huntsville,2026-Q2,safety,4,open,2026-06-09,Repeated eyewash station pressure fault
-huntsville,2026-Q3,equipment,5,open,2026-08-13,"Robotic arm calibration drift, scrap rate up"
-huntsville,2026-Q3,facility,3,closed,2026-09-01,Loading dock door off track
-costa-mesa,2026-Q2,facility,2,closed,2026-05-04,"HVAC zone imbalance, west wing"
-costa-mesa,2026-Q3,equipment,3,open,2026-07-22,Conveyor sensor intermittent
-austin-fab,2026-Q1,supply,2,closed,2026-01-30,Anodize bath chemistry off
-phoenix-line,2026-Q3,facility,3,open,2026-08-28,Insufficient floor space staging WIP
-seattle-ops,2026-Q2,safety,2,closed,2026-04-15,Racking inspection finding
-boston-rd,2026-Q1,equipment,1,closed,2026-02-06,Fume hood airflow low
-QNTC,2026-Q3,facility,4,open,2026-09-09,Generator transfer switch unreliable (inherited)
-tucson-line,2026-Q2,equipment,3,open,2026-06-30,Press brake overdue for PM (unknown site)
+maritime-systems,2025-Q4,equipment,5,open,2025-11-12,Autoclave temperature excursion on hull cure
+maritime-systems,2025-Q4,safety,4,closed,2025-12-03,Crane load-test overdue in bay 2
+maritime-systems,2026-Q1,facility,4,open,2026-02-18,Seawater test tank liner leak
+maritime-systems,2026-Q1,equipment,5,open,2026-03-05,"Ballast actuator failures, scrap up"
+maritime-systems,2026-Q2,supply,3,closed,2026-05-20,Titanium lot rejected at incoming QA
+maritime-systems,2026-Q2,safety,4,open,2026-06-08,Confined-space entry permit lapse
+maritime-systems,2026-Q3,equipment,5,open,2026-08-14,Pressure-hull weld porosity recurring
+arsenal-campus,2026-Q2,facility,3,open,2026-05-04,WIP staging cramped on Line 1
+arsenal-campus,2026-Q3,equipment,3,open,2026-07-22,Robotic riveter intermittent
+srm-complex,2026-Q2,safety,4,closed,2026-04-15,Propellant mix room interlock fault
+hq-flagship,2026-Q1,equipment,2,closed,2026-01-30,CMM calibration drift
+composites-uav,2026-Q2,facility,2,closed,2026-05-06,Layup room humidity excursion
+space-domain,2026-Q3,facility,3,open,2026-08-20,Clean-room particle count high (integration)
+AIF,2026-Q3,facility,4,open,2026-09-09,UPS transfer switch unreliable (inherited)
+kona-test-range,2026-Q2,equipment,3,open,2026-06-30,Telemetry rack overdue for PM (unknown site)

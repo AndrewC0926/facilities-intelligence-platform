@@ -1,12 +1,12 @@
 site_id,site_name,region,quarter,issue_count,avg_severity,open_count,critical_count
-austin-fab,Austin Fabrication,Central,2026-Q1,1,2.0,0,0
-boston-rd,Boston R&D Lab,Northeast,2026-Q1,1,1.0,0,0
-costa-mesa,Costa Mesa HQ & Flagship Factory,West,2026-Q2,1,2.0,0,0
-costa-mesa,Costa Mesa HQ & Flagship Factory,West,2026-Q3,1,3.0,1,0
-huntsville,Huntsville Integration,Southeast,2025-Q4,2,4.5,1,2
-huntsville,Huntsville Integration,Southeast,2026-Q1,2,4.5,2,2
-huntsville,Huntsville Integration,Southeast,2026-Q2,2,3.5,1,1
-huntsville,Huntsville Integration,Southeast,2026-Q3,2,4.0,1,1
-phoenix-line,Phoenix Production Line,West,2026-Q3,1,3.0,1,0
-quantico-acq,Quantico Acq.,Mid-Atlantic,2026-Q3,1,4.0,1,1
-seattle-ops,Seattle Logistics & Warehouse,West,2026-Q2,1,2.0,0,0
+advanced-imaging,Advanced Imaging Facility,Southeast,2026-Q3,1,4.0,1,1
+arsenal-campus,Arsenal Campus,West,2026-Q2,1,3.0,1,0
+arsenal-campus,Arsenal Campus,West,2026-Q3,1,3.0,1,0
+composites-uav,Composites & UAV Integration,Southeast,2026-Q2,1,2.0,0,0
+hq-flagship,HQ & Flagship Factory,West,2026-Q1,1,2.0,0,0
+maritime-systems,Maritime Systems Factory,Northeast,2025-Q4,2,4.5,1,2
+maritime-systems,Maritime Systems Factory,Northeast,2026-Q1,2,4.5,2,2
+maritime-systems,Maritime Systems Factory,Northeast,2026-Q2,2,3.5,1,1
+maritime-systems,Maritime Systems Factory,Northeast,2026-Q3,1,5.0,1,1
+space-domain,Space Domain Campus,Mountain,2026-Q3,1,3.0,1,0
+srm-complex,Solid Rocket Motor Complex,South,2026-Q2,1,4.0,0,1

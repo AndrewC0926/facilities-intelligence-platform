@@ -1,8 +1,10 @@
-site_id,site_name,region,sq_ft,seat_capacity,power_kw_capacity,site_type,status,lease_expiration_date,lease_option_deadline,source_system
-costa-mesa,Costa Mesa HQ & Flagship Factory,West,5000000,12000,60000,factory,operational,,,canonical
-atlanta-campus,Atlanta Innovation Campus,Southeast,,,,campus,buildout,,,canonical
-austin-fab,Austin Fabrication,Central,800000,3000,20000,factory,operational,2030-03-01,2029-09-01,canonical
-huntsville,Huntsville Integration,Southeast,600000,2500,15000,factory,operational,2029-09-01,2029-03-01,canonical
-boston-rd,Boston R&D Lab,Northeast,60000,400,1500,office,operational,2027-01-01,2026-07-01,canonical
-seattle-ops,Seattle Logistics & Warehouse,West,1200000,500,8000,warehouse,operational,2031-05-01,2030-11-01,canonical
-phoenix-line,Phoenix Production Line,West,200000,1200,4800,factory,operational,2028-02-01,2026-08-02,canonical
+site_id,site_name,region,sq_ft,seat_capacity,power_kw_capacity,site_type,status,site_status,integration_start_date,lease_expiration_date,lease_option_deadline,source_system
+arsenal-campus,Arsenal Campus,West,980000,6000,28000,factory,operational,operational,,2031-12-01,2026-08-02,canonical
+hq-flagship,HQ & Flagship Factory,West,640000,2500,8500,factory,operational,operational,,,,canonical
+long-beach,Long Beach Campus,West,,,,campus,buildout,buildout,,,,canonical
+srm-complex,Solid Rocket Motor Complex,South,92000,400,6200,factory,operational,operational,,,,canonical
+maritime-systems,Maritime Systems Factory,Northeast,140000,600,3200,factory,operational,operational,,2029-06-01,2028-06-01,canonical
+composites-uav,Composites & UAV Integration,Southeast,148000,700,2400,factory,acquired,acquired_complete,2024-12-01,2030-03-01,2029-09-01,canonical
+space-domain,Space Domain Campus,Mountain,80000,300,4100,campus,acquired,acquired_integrating,2025-12-01,,,canonical
+seattle-hub,Seattle Engineering Hub,West,95000,1200,1800,office,operational,operational,,2029-01-01,2028-07-01,canonical
+boston-maritime,Boston Maritime Engineering,Northeast,48000,350,1200,office,operational,operational,,2028-03-01,2027-09-01,canonical

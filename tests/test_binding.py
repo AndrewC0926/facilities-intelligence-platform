@@ -8,47 +8,47 @@ def _by_id(conn):
     return {r["site_id"]: r for r in db.query(conn, "SELECT * FROM vw_capacity_collision")}
 
 
-def test_phoenix_binds_on_power_before_floor(built_db):
+def test_arsenal_binds_on_power_before_floor(built_db):
     conn, _ = built_db
-    phx = _by_id(conn)["phoenix-line"]
-    # floor story is intact and unchanged
-    assert phx["quarters_to_wall"] == 2
-    assert phx["projected_breach_quarter"] == "2027-Q1"
+    arsenal = _by_id(conn)["arsenal-campus"]
+    # floor story: breaches one quarter after power
+    assert arsenal["quarters_to_wall"] == 2
+    assert arsenal["projected_breach_quarter"] == "2027-Q1"
     # power hits the wall one quarter sooner -> power is the binding constraint
-    assert phx["power_quarters_to_wall"] == 1
-    assert phx["power_breach_quarter"] == "2026-Q4"
-    assert phx["binding_constraint"] == "power"
-    assert phx["binding_breach_quarter"] == "2026-Q4"
-    assert phx["binding_status"] == "COLLISION WARNING"
+    assert arsenal["power_quarters_to_wall"] == 1
+    assert arsenal["power_breach_quarter"] == "2026-Q4"
+    assert arsenal["binding_constraint"] == "power"
+    assert arsenal["binding_breach_quarter"] == "2026-Q4"
+    assert arsenal["binding_status"] == "COLLISION WARNING"
 
 
 def test_stable_sites_have_no_binding_constraint(built_db):
     conn, _ = built_db
     rows = _by_id(conn)
-    assert rows["costa-mesa"]["binding_constraint"] == "none"
-    # atlanta: both ceilings unknown (mid-buildout) -> pending, never a false breach
-    atl = rows["atlanta-campus"]
-    assert atl["binding_constraint"] == "none"
-    assert atl["binding_status"] == "unknown — capacity data pending"
+    assert rows["hq-flagship"]["binding_constraint"] == "none"
+    # long-beach: a plan but both ceilings unknown (mid-buildout) -> pending, no false breach
+    lb = rows["long-beach"]
+    assert lb["binding_constraint"] == "none"
+    assert lb["binding_status"] == "unknown — capacity data pending"
 
 
 def test_reconciliation_status_view_reports_two_exceptions(built_db):
     conn, _ = built_db
     rec = db.query(conn, "SELECT * FROM vw_reconciliation_status")[0]
     assert rec["acquired_sites"] == 1
-    assert rec["open_exceptions"] == 2     # CAD/USD conflict + tucson-line orphan
+    assert rec["open_exceptions"] == 2     # CAD/USD conflict + kona-test-range orphan
 
 
-def test_project_is_pure_and_matches_the_phoenix_numbers():
-    # power: 4,800 kW ceiling, 3,900 kW demand, +260 kW/quarter, last quarter 2026-Q3
+def test_project_is_pure_and_dates_the_breach():
+    # a constraint at 22,400 of 28,000 kW (wall 23,800), +1,400/q, last quarter 2026-Q3
     last_q = 2026 * 4 + 3 - 1
-    p = scenario.project(4800, 3900, 260, last_q)
+    p = scenario.project(28000, 22400, 1400, last_q)
     assert p["quarters_to_wall"] == 1
     assert p["breach_quarter"] == "2026-Q4"
     assert p["status"] == "COLLISION WARNING"
     # flat growth -> no collision; unknown capacity -> pending
-    assert scenario.project(4800, 3900, 0, last_q)["quarters_to_wall"] is None
-    assert scenario.project(None, 3900, 260, last_q)["status"] == "unknown — capacity data pending"
+    assert scenario.project(28000, 22400, 0, last_q)["quarters_to_wall"] is None
+    assert scenario.project(None, 22400, 1400, last_q)["status"] == "unknown — capacity data pending"
 
 
 def test_scenario_at_1x_reproduces_the_view(built_db):
@@ -68,21 +68,21 @@ def test_scenario_at_1x_reproduces_the_view(built_db):
 def test_higher_multiplier_pulls_the_breach_quarter_in(built_db):
     conn, _ = built_db
     base = db.query(conn, "SELECT * FROM vw_capacity_collision")
-    phx_1x = {r["site_id"]: r for r in scenario.apply(base, {})}["phoenix-line"]
-    phx_3x = {r["site_id"]: r for r in scenario.apply(base, {"phoenix-line": 3.0})}["phoenix-line"]
+    a_1x = {r["site_id"]: r for r in scenario.apply(base, {})}["arsenal-campus"]
+    a_3x = {r["site_id"]: r for r in scenario.apply(base, {"arsenal-campus": 3.0})}["arsenal-campus"]
     # floor breach moves earlier under faster growth (power was already next quarter)
-    assert phx_3x["quarters_to_wall"] < phx_1x["quarters_to_wall"]
+    assert a_3x["quarters_to_wall"] < a_1x["quarters_to_wall"]
     # zero growth -> the site no longer collides at all (binding flips to 'none')
-    phx_0x = {r["site_id"]: r for r in scenario.apply(base, {"phoenix-line": 0.0})}["phoenix-line"]
-    assert phx_0x["binding_constraint"] == "none"
+    a_0x = {r["site_id"]: r for r in scenario.apply(base, {"arsenal-campus": 0.0})}["arsenal-campus"]
+    assert a_0x["binding_constraint"] == "none"
 
 
 def test_relocation_recommends_a_same_region_site_with_slack(built_db):
     conn, _ = built_db
     rows = scenario.apply(db.query(conn, "SELECT * FROM vw_capacity_collision"), {})
-    rec = scenario.recommend_relocation(rows, "phoenix-line")
+    rec = scenario.recommend_relocation(rows, "arsenal-campus")
     assert rec is not None
     assert rec["constraint"] == "power"        # measured on the binding constraint
-    assert rec["same_region"] is True          # Phoenix and Costa Mesa are both West
-    assert rec["site_id"] == "costa-mesa"       # most slack in-region
+    assert rec["same_region"] is True          # Arsenal and HQ are both West
+    assert rec["site_id"] == "hq-flagship"      # most power slack in-region
     assert rec["slack"] >= rec["overflow"]

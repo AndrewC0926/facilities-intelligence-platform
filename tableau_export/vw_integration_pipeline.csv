@@ -1,0 +1,4 @@
+site_id,site_name,site_status,integration_start_date,null_critical_fields,completeness_pct,stalled_flag
+long-beach,Long Beach Campus,buildout,,5,0.0,0
+advanced-imaging,Advanced Imaging Facility,acquired_integrating,2026-03-01,4,20.0,0
+space-domain,Space Domain Campus,acquired_integrating,2025-12-01,2,60.0,0
