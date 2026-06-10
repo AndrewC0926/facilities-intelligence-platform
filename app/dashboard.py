@@ -35,8 +35,13 @@ st.caption("One source of truth across ERP · MRP · HRIS — every tile reads a
            "exactly as Tableau would.")
 
 if not os.path.exists(db.DB_PATH):
-    st.error("No database found. Run `make demo` (or `make pipeline`) first.")
-    st.stop()
+    # Cloud-friendly bootstrap: on a fresh deploy there is no fip.db yet.
+    # Run the full pipeline (seed -> schema -> ETL+reconcile -> views -> exports)
+    # right here so the app works from a bare git clone with zero setup.
+    with st.spinner("First boot: building the database (seed -> ETL -> reconcile -> views)..."):
+        from fip import pipeline
+        pipeline.run()
+    st.toast("Pipeline complete. Database built from source exports.", icon="✅")
 
 # --- Collision detector: the headline alert -----------------------------------
 st.header("⚠️ Capacity Collision Detector")
