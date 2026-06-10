@@ -1,27 +1,37 @@
 site_id,quarter,program,units_planned,sqft_per_unit,kw_per_unit
-phoenix-line,2025-Q4,Anvil,240,500,13
-phoenix-line,2026-Q1,Anvil,260,500,13
-phoenix-line,2026-Q2,Anvil,280,500,13
-phoenix-line,2026-Q3,Anvil,300,500,13
-costa-mesa,2025-Q4,Anvil,1200,1000,10
-costa-mesa,2026-Q1,Anvil,1200,1000,10
-costa-mesa,2026-Q2,Anvil,1200,1000,10
-costa-mesa,2026-Q3,Anvil,1200,1000,10
-austin-fab,2025-Q4,Forge,1500,200,5
-austin-fab,2026-Q1,Forge,1500,200,5
-austin-fab,2026-Q2,Forge,1500,200,5
-austin-fab,2026-Q3,Forge,1500,200,5
-huntsville,2025-Q4,Sentinel,1000,150,6
-huntsville,2026-Q1,Sentinel,1000,150,6
-huntsville,2026-Q2,Sentinel,1000,150,6
-huntsville,2026-Q3,Sentinel,1000,150,6
-seattle-ops,2025-Q4,Logistics,2000,50,1
-seattle-ops,2026-Q1,Logistics,2000,50,1
-seattle-ops,2026-Q2,Logistics,2000,50,1
-seattle-ops,2026-Q3,Logistics,2000,50,1
-boston-rd,2025-Q4,Lab,100,100,5
-boston-rd,2026-Q1,Lab,100,100,5
-boston-rd,2026-Q2,Lab,100,100,5
-boston-rd,2026-Q3,Lab,100,100,5
-atlanta-campus,2026-Q2,Sentinel,100,400,30
-atlanta-campus,2026-Q3,Sentinel,200,400,30
+arsenal-campus,2025-Q4,Arsenal Production,1,646000,18200
+arsenal-campus,2026-Q1,Arsenal Production,1,684000,19600
+arsenal-campus,2026-Q2,Arsenal Production,1,722000,21000
+arsenal-campus,2026-Q3,Arsenal Production,1,760000,22400
+srm-complex,2025-Q4,SRM Production,1,40000,4600
+srm-complex,2026-Q1,SRM Production,1,40000,4720
+srm-complex,2026-Q2,SRM Production,1,40000,4840
+srm-complex,2026-Q3,SRM Production,1,40000,4960
+hq-flagship,2025-Q4,Production,1,360000,3400
+hq-flagship,2026-Q1,Production,1,360000,3400
+hq-flagship,2026-Q2,Production,1,360000,3400
+hq-flagship,2026-Q3,Production,1,360000,3400
+maritime-systems,2025-Q4,Production,1,60000,1280
+maritime-systems,2026-Q1,Production,1,60000,1280
+maritime-systems,2026-Q2,Production,1,60000,1280
+maritime-systems,2026-Q3,Production,1,60000,1280
+composites-uav,2025-Q4,Production,1,70000,960
+composites-uav,2026-Q1,Production,1,70000,960
+composites-uav,2026-Q2,Production,1,70000,960
+composites-uav,2026-Q3,Production,1,70000,960
+space-domain,2025-Q4,Production,1,30000,2050
+space-domain,2026-Q1,Production,1,30000,2050
+space-domain,2026-Q2,Production,1,30000,2050
+space-domain,2026-Q3,Production,1,30000,2050
+seattle-hub,2025-Q4,Production,1,40000,720
+seattle-hub,2026-Q1,Production,1,40000,720
+seattle-hub,2026-Q2,Production,1,40000,720
+seattle-hub,2026-Q3,Production,1,40000,720
+boston-maritime,2025-Q4,Production,1,20000,480
+boston-maritime,2026-Q1,Production,1,20000,480
+boston-maritime,2026-Q2,Production,1,20000,480
+boston-maritime,2026-Q3,Production,1,20000,480
+long-beach,2025-Q4,Production (planned),1,220000,6000
+long-beach,2026-Q1,Production (planned),1,220000,6000
+long-beach,2026-Q2,Production (planned),1,220000,6000
+long-beach,2026-Q3,Production (planned),1,220000,6000

@@ -1,8 +1,10 @@
 site_id,site_name,region,available_sqft,latest_quarter,latest_demanded_sqft,growth_sqft_per_quarter,current_util_pct,projected_util_2q_pct,quarters_to_wall,projected_breach_quarter,collision_status,available_kw,latest_demanded_kw,growth_kw_per_quarter,power_util_pct,projected_power_util_2q_pct,power_quarters_to_wall,power_breach_quarter,power_status,binding_constraint,binding_quarters_to_wall,binding_breach_quarter,binding_status
-atlanta-campus,Atlanta Innovation Campus,Southeast,,2026-Q3,80000.0,40000.0,,,,,unknown — capacity data pending,,6000.0,3000.0,,,,,unknown — capacity data pending,none,,,unknown — capacity data pending
-austin-fab,Austin Fabrication,Central,800000,2026-Q3,300000.0,0.0,37.5,37.5,,,stable,20000,7500.0,0.0,37.5,37.5,,,stable,none,,,stable
-boston-rd,Boston R&D Lab,Northeast,60000,2026-Q3,10000.0,0.0,16.7,16.7,,,stable,1500,500.0,0.0,33.3,33.3,,,stable,none,,,stable
-costa-mesa,Costa Mesa HQ & Flagship Factory,West,5000000,2026-Q3,1200000.0,0.0,24.0,24.0,,,stable,60000,12000.0,0.0,20.0,20.0,,,stable,none,,,stable
-huntsville,Huntsville Integration,Southeast,600000,2026-Q3,150000.0,0.0,25.0,25.0,,,stable,15000,6000.0,0.0,40.0,40.0,,,stable,none,,,stable
-phoenix-line,Phoenix Production Line,West,200000,2026-Q3,150000.0,10000.0,75.0,85.0,2,2027-Q1,COLLISION WARNING,4800,3900.0,260.0,81.3,92.1,1,2026-Q4,COLLISION WARNING,power,1,2026-Q4,COLLISION WARNING
-seattle-ops,Seattle Logistics & Warehouse,West,1200000,2026-Q3,100000.0,0.0,8.3,8.3,,,stable,8000,2000.0,0.0,25.0,25.0,,,stable,none,,,stable
+arsenal-campus,Arsenal Campus,West,980000,2026-Q3,760000.0,38000.0,77.6,85.3,2,2027-Q1,COLLISION WARNING,28000,22400.0,1400.0,80.0,90.0,1,2026-Q4,COLLISION WARNING,power,1,2026-Q4,COLLISION WARNING
+boston-maritime,Boston Maritime Engineering,Northeast,48000,2026-Q3,20000.0,0.0,41.7,41.7,,,stable,1200,480.0,0.0,40.0,40.0,,,stable,none,,,stable
+composites-uav,Composites & UAV Integration,Southeast,148000,2026-Q3,70000.0,0.0,47.3,47.3,,,stable,2400,960.0,0.0,40.0,40.0,,,stable,none,,,stable
+hq-flagship,HQ & Flagship Factory,West,640000,2026-Q3,360000.0,0.0,56.3,56.3,,,stable,8500,3400.0,0.0,40.0,40.0,,,stable,none,,,stable
+long-beach,Long Beach Campus,West,,2026-Q3,220000.0,0.0,,,,,unknown — capacity data pending,,6000.0,0.0,,,,,unknown — capacity data pending,none,,,unknown — capacity data pending
+maritime-systems,Maritime Systems Factory,Northeast,140000,2026-Q3,60000.0,0.0,42.9,42.9,,,stable,3200,1280.0,0.0,40.0,40.0,,,stable,none,,,stable
+seattle-hub,Seattle Engineering Hub,West,95000,2026-Q3,40000.0,0.0,42.1,42.1,,,stable,1800,720.0,0.0,40.0,40.0,,,stable,none,,,stable
+space-domain,Space Domain Campus,Mountain,80000,2026-Q3,30000.0,0.0,37.5,37.5,,,stable,4100,2050.0,0.0,50.0,50.0,,,stable,none,,,stable
+srm-complex,Solid Rocket Motor Complex,South,92000,2026-Q3,40000.0,0.0,43.5,43.5,,,stable,6200,4960.0,120.0,80.0,83.9,3,2027-Q2,watch,power,3,2027-Q2,watch

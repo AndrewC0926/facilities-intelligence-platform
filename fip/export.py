@@ -23,6 +23,8 @@ PUBLISHED_VIEWS = [
     "vw_open_actions",
     "vw_lease_cliff",
     "vw_site_health",
+    "vw_program_facility_risk",
+    "vw_integration_pipeline",
 ]
 
 

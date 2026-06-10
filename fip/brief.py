@@ -112,9 +112,14 @@ def render(conn=None, today=None, multipliers=None):
         exceptions = db.query(
             conn, "SELECT source_file, reason FROM etl_exceptions ORDER BY exception_id")
         action_summary = actions.summary(conn, today)
+        pipeline = db.query(conn, "SELECT * FROM vw_integration_pipeline")
     finally:
         if own:
             conn.close()
+
+    integrating = sum(1 for p in pipeline if p["site_status"] == "acquired_integrating")
+    below_80 = sum(1 for p in pipeline if p["completeness_pct"] < 80)
+    stalled = sum(1 for p in pipeline if p["stalled_flag"])
 
     at_risk = sorted(
         [r for r in rows if r["binding_status"] in ("COLLISION WARNING", "AT THE WALL NOW")],
@@ -129,7 +134,7 @@ def render(conn=None, today=None, multipliers=None):
                              + ", ".join(f"{k}×{v:g}" for k, v in active.items()) + "._\n")
 
     md = f"""# Facilities Intelligence — Executive Brief
-_Generated {today.isoformat()} from the live semantic views (`vw_capacity_collision`, `vw_reconciliation_status`, `vw_open_actions`)._
+_Generated {today.isoformat()} from the live semantic views (`vw_capacity_collision`, `vw_reconciliation_status`, `vw_open_actions`, `vw_integration_pipeline`)._
 {scenario_note}
 ## Headline risk
 
@@ -144,11 +149,14 @@ power. The binding constraint is whichever wall is hit first.
 
 ## Acquisition reconciliation
 
-- **{recon['acquired_sites']}** acquired site(s) folded into the canonical model.
+- **{recon['acquired_sites']}** acquired site(s) reconciled from a dirty import.
 - **{recon['open_exceptions']}** item(s) in the exceptions queue awaiting a human decision:
 """
     for e in exceptions:
         md += f"  - `{e['source_file']}` — {e['reason']}\n"
+    md += (f"- Integration pipeline: **{integrating}** site(s) in active integration, "
+           f"**{below_80}** below 80% data completeness"
+           + (f" (**{stalled}** stalled >12 mo)" if stalled else "") + ".\n")
 
     if action_summary["oldest_age_days"] is not None:
         aging = (f"the oldest unresolved item is **{action_summary['oldest_age_days']} days** "

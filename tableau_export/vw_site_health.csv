@@ -1,9 +1,11 @@
 site_id,site_name,region,capacity_score,quality_score,cost_score,completeness_score,health_score
-costa-mesa,Costa Mesa HQ & Flagship Factory,West,76.0,88.0,100.0,100.0,91.0
-atlanta-campus,Atlanta Innovation Campus,Southeast,0.0,100.0,0.0,40.0,35.0
-austin-fab,Austin Fabrication,Central,62.5,100.0,100.0,100.0,90.6
-huntsville,Huntsville Integration,Southeast,60.0,0.0,98.0,100.0,64.5
-boston-rd,Boston R&D Lab,Northeast,66.7,100.0,0.0,100.0,66.7
-seattle-ops,Seattle Logistics & Warehouse,West,75.0,100.0,100.0,100.0,93.8
-phoenix-line,Phoenix Production Line,West,18.7,88.0,11.7,100.0,54.6
-quantico-acq,Quantico Acq.,Mid-Atlantic,0.0,80.0,100.0,80.0,65.0
+arsenal-campus,Arsenal Campus,West,20.0,76.0,100.0,100.0,74.0
+hq-flagship,HQ & Flagship Factory,West,43.7,100.0,100.0,100.0,85.9
+long-beach,Long Beach Campus,West,0.0,100.0,0.0,100.0,50.0
+srm-complex,Solid Rocket Motor Complex,South,20.0,92.0,59.3,100.0,67.8
+maritime-systems,Maritime Systems Factory,Northeast,57.1,0.0,100.0,100.0,64.3
+composites-uav,Composites & UAV Integration,Southeast,52.7,100.0,100.0,100.0,88.2
+space-domain,Space Domain Campus,Mountain,50.0,88.0,100.0,100.0,84.5
+seattle-hub,Seattle Engineering Hub,West,57.9,100.0,63.8,100.0,80.4
+boston-maritime,Boston Maritime Engineering,Northeast,58.3,100.0,48.0,100.0,76.6
+advanced-imaging,Advanced Imaging Facility,Southeast,0.0,80.0,93.4,100.0,68.4

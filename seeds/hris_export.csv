@@ -1,34 +1,40 @@
 site_id,quarter,program,headcount
-costa-mesa,2025-Q4,Anvil,5000
-costa-mesa,2026-Q1,Anvil,5800
-costa-mesa,2026-Q2,Anvil,6600
-costa-mesa,2026-Q3,Anvil,7600
-costa-mesa,2025-Q4,Sentinel,4000
-costa-mesa,2026-Q1,Sentinel,4400
-costa-mesa,2026-Q2,Sentinel,5000
-costa-mesa,2026-Q3,Sentinel,5800
-costa-mesa,2026-Q1,Anvil,9999
-costa-mesa,2026-Q1,Anvil,5800
-austin-fab,2025-Q4,Forge,2400
-austin-fab,2026-Q1,Forge,2420
-austin-fab,2026-Q2,Forge,2450
-austin-fab,2026-Q3,Forge,2480
-huntsville,2025-Q4,Sentinel,2000
-huntsville,2026-Q1,Sentinel,2050
-huntsville,2026-Q2,Sentinel,2100
-huntsville,2026-Q3,Sentinel,2150
-boston-rd,12/2025,Lab,180
-boston-rd,2026-Q1,Lab,185
-boston-rd,2026-Q2,Lab,190
-boston-rd,2026-Q3,Lab,195
-seattle-ops,2025-Q4,Logistics,300
-seattle-ops,2026-Q1,Logistics,310
-seattle-ops,2026-Q2,Logistics,320
-seattle-ops,2026-Q3,Logistics,330
-phoenix-line,2025-Q4,Anvil,600
-phoenix-line,2026-Q1,Anvil,700
-phoenix-line,2026-Q2,Anvil,800
-phoenix-line,2026-Q3,Anvil,900
-atlanta-campus,2026-Q2,Sentinel,50
-atlanta-campus,2026-Q3,Sentinel,200
-Quantico Acq.,2026-Q3,Recon,850
+arsenal-campus,2025-Q4,Fury CCA,2600
+arsenal-campus,2026-Q1,Fury CCA,2900
+arsenal-campus,2026-Q2,Fury CCA,3200
+arsenal-campus,2026-Q3,Fury CCA,3500
+arsenal-campus,2025-Q4,Roadrunner,1400
+arsenal-campus,2026-Q1,Roadrunner,1500
+arsenal-campus,2026-Q2,Roadrunner,1600
+arsenal-campus,2026-Q3,Roadrunner,1700
+seattle-hub,2025-Q4,Lattice OS,1100
+seattle-hub,2026-Q1,Lattice OS,1200
+seattle-hub,2026-Q2,Lattice OS,1300
+seattle-hub,2026-Q3,Lattice OS,1400
+seattle-hub,2026-Q1,Lattice OS,9999
+seattle-hub,2026-Q1,Lattice OS,1200
+hq-flagship,2025-Q4,Lattice OS,1900
+hq-flagship,2026-Q1,Lattice OS,1950
+hq-flagship,2026-Q2,Lattice OS,2000
+hq-flagship,2026-Q3,Lattice OS,2050
+srm-complex,2025-Q4,SRM Supply,260
+srm-complex,2026-Q1,SRM Supply,290
+srm-complex,2026-Q2,SRM Supply,320
+srm-complex,2026-Q3,SRM Supply,350
+maritime-systems,2025-Q4,Ghost Shark,430
+maritime-systems,2026-Q1,Ghost Shark,450
+maritime-systems,2026-Q2,Ghost Shark,470
+maritime-systems,2026-Q3,Ghost Shark,490
+composites-uav,2025-Q4,ALTIUS Series,470
+composites-uav,2026-Q1,ALTIUS Series,500
+composites-uav,2026-Q2,ALTIUS Series,530
+composites-uav,2026-Q3,ALTIUS Series,560
+space-domain,2025-Q4,Space Ops,140
+space-domain,2026-Q1,Space Ops,160
+space-domain,2026-Q2,Space Ops,180
+space-domain,2026-Q3,Space Ops,200
+boston-maritime,12/2025,Ghost Shark,170
+boston-maritime,2026-Q1,Ghost Shark,175
+boston-maritime,2026-Q2,Ghost Shark,180
+boston-maritime,2026-Q3,Ghost Shark,185
+Advanced Imaging,2026-Q3,Sensor Integration,95

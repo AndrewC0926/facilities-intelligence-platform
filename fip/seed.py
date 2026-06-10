@@ -7,24 +7,34 @@ site) so the ETL's reconciliation has real work to do. The cleaning is the demo.
 Deterministic: no randomness, so `make demo` produces the same portfolio every
 time and the tests can assert exact outcomes.
 
-8 sites, loosely modeled on a defense-hardware footprint:
-  costa-mesa     5M sq ft HQ + flagship factory, headcount ramping past its seats
-  atlanta-campus new ~$1B campus mid-buildout, capacity data still pending (NULLs)
-  austin-fab     mature factory, healthy baseline
-  huntsville     mature factory with a high quality-issue rate (the problem site)
-  boston-rd      small R&D office, paying for empty seats (under-utilized)
-  seattle-ops    big cheap warehouse — the $/sq ft outlier
-  phoenix-line   factory whose MRP demand is ramping into the wall (collision!)
-  quantico-acq   recently acquired — arrives as a messy dump with bad site codes
+The portfolio models a defense-hardware company at hyperscale — a flagship
+mega-factory whose POWER service is the binding constraint, a campus under
+construction, a rocket-motor complex ramping hard, and several recently-acquired
+sites at different stages of integration.
+
+10 sites:
+  arsenal-campus   the flagship mega-factory (Bldg 1 of 7 operational); POWER is
+                   the binding constraint — breaches in 2026-Q4, floor in 2027-Q1
+  hq-flagship      HQ & flagship factory; healthy headroom
+  long-beach       new campus under construction — capacity data NULL (buildout)
+  srm-complex      solid rocket motor complex, ramping 600 -> 6,000 motors/yr
+                   (a 2027 power 'watch', further out than Arsenal)
+  maritime-systems undersea systems factory — the quality hotspot
+  composites-uav   acquired (Area-I), integration complete (18 months in)
+  advanced-imaging acquired recently and DIRTY — arrives via the messy dump
+  space-domain     acquired 6 months ago, integration in progress
+  seattle-hub      engineering hub — over its seat capacity
+  boston-maritime  small maritime engineering office — under-utilized seats
+
+The observation window is anchored so the projected breaches land in the FUTURE
+relative to a mid-2026 "today".
 """
 import csv
 import os
 
 SEED_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "seeds")
-# The observation window is the four planned quarters the MRP/HRIS feeds cover.
-# It is anchored so the projected capacity breaches land in the FUTURE relative to
-# a mid-2026 "today": Phoenix hits its POWER wall in 2026-Q4 and its FLOOR wall one
-# quarter later in 2027-Q1.
+# Four planned quarters, anchored so Arsenal's POWER wall lands in 2026-Q4 and its
+# FLOOR wall one quarter later in 2027-Q1 (both in the future relative to mid-2026).
 QUARTERS = ["2025-Q4", "2026-Q1", "2026-Q2", "2026-Q3"]
 
 
@@ -38,39 +48,48 @@ def _write(name, header, rows):
     return path
 
 
-# -- sites_master.csv : the 7 clean canonical sites (quantico arrives dirty, separately)
-#    Lease dates drive the lease-cliff calendar. Owned sites have no lease cliff
-#    (NULL dates). phoenix-line's option deadline is set 60 days before its 2026-Q1
-#    POWER breach -> an urgent "decide before the wall" flag (decision window < 180d).
+# -- sites_master.csv : the 9 clean canonical sites. The 10th (advanced-imaging)
+#    arrives dirty, separately, via the acquired dump and is reconciled in by the ETL.
+#    Power is in kW throughout. NULLs are deliberate: long-beach is mid-construction;
+#    arsenal's lease option deadline is set ~60 days before its 2026-Q4 power breach
+#    to create an urgent lease-cliff flag.
 def seed_sites():
     rows = [
-        # site_id, site_name, region, sq_ft, seat_capacity, power_kw_capacity, site_type, status, lease_expiration_date, lease_option_deadline, source_system
-        ["costa-mesa",     "Costa Mesa HQ & Flagship Factory", "West",      5000000, 12000, 60000, "factory",   "operational", "",           "",           "canonical"],  # owned: no lease cliff
-        ["atlanta-campus", "Atlanta Innovation Campus",        "Southeast", "",      "",    "",    "campus",    "buildout",    "",           "",           "canonical"],  # owned: no lease cliff
-        ["austin-fab",     "Austin Fabrication",               "Central",   800000,  3000,  20000, "factory",   "operational", "2030-03-01", "2029-09-01", "canonical"],
-        ["huntsville",     "Huntsville Integration",           "Southeast", 600000,  2500,  15000, "factory",   "operational", "2029-09-01", "2029-03-01", "canonical"],
-        ["boston-rd",      "Boston R&D Lab",                   "Northeast", 60000,   400,   1500,  "office",    "operational", "2027-01-01", "2026-07-01", "canonical"],
-        ["seattle-ops",    "Seattle Logistics & Warehouse",    "West",      1200000, 500,   8000,  "warehouse", "operational", "2031-05-01", "2030-11-01", "canonical"],
-        ["phoenix-line",   "Phoenix Production Line",          "West",      200000,  1200,  4800,  "factory",   "operational", "2028-02-01", "2026-08-02", "canonical"],  # option deadline 60d before 2026-Q4 power breach
+        # site_id, site_name, region, sq_ft, seat_capacity, power_kw_capacity, site_type,
+        #   status, site_status, integration_start_date, lease_expiration_date, lease_option_deadline, source_system
+        ["arsenal-campus",   "Arsenal Campus",               "West",      980000,  6000, 28000, "factory", "operational", "operational",          "",           "2031-12-01", "2026-08-02", "canonical"],
+        ["hq-flagship",      "HQ & Flagship Factory",        "West",      640000,  2500, 8500,  "factory", "operational", "operational",          "",           "",           "",           "canonical"],
+        ["long-beach",       "Long Beach Campus",            "West",      "",      "",   "",    "campus",  "buildout",    "buildout",             "",           "",           "",           "canonical"],
+        ["srm-complex",      "Solid Rocket Motor Complex",   "South",     92000,   400,  6200,  "factory", "operational", "operational",          "",           "",           "",           "canonical"],
+        ["maritime-systems", "Maritime Systems Factory",     "Northeast", 140000,  600,  3200,  "factory", "operational", "operational",          "",           "2029-06-01", "2028-06-01", "canonical"],
+        ["composites-uav",   "Composites & UAV Integration", "Southeast", 148000,  700,  2400,  "factory", "acquired",    "acquired_complete",    "2024-12-01", "2030-03-01", "2029-09-01", "canonical"],
+        ["space-domain",     "Space Domain Campus",          "Mountain",  80000,   300,  4100,  "campus",  "acquired",    "acquired_integrating", "2025-12-01", "",           "",           "canonical"],
+        ["seattle-hub",      "Seattle Engineering Hub",      "West",      95000,   1200, 1800,  "office",  "operational", "operational",          "",           "2029-01-01", "2028-07-01", "canonical"],
+        ["boston-maritime",  "Boston Maritime Engineering",  "Northeast", 48000,   350,  1200,  "office",  "operational", "operational",          "",           "2028-03-01", "2027-09-01", "canonical"],
     ]
     return _write("sites_master.csv",
-                  ["site_id", "site_name", "region", "sq_ft", "seat_capacity", "power_kw_capacity", "site_type", "status",
+                  ["site_id", "site_name", "region", "sq_ft", "seat_capacity", "power_kw_capacity",
+                   "site_type", "status", "site_status", "integration_start_date",
                    "lease_expiration_date", "lease_option_deadline", "source_system"],
                   rows)
 
 
-# -- leases.csv : clean cost layer for the canonical sites.
-#    seattle-ops is the cheap-per-sqft outlier; atlanta has huge rent but unknown sq_ft.
+# -- leases.csv : clean cost layer for the canonical sites. arsenal & hq are the
+#    cheap-per-sqft outliers (huge footprints); the small offices are the dear ones;
+#    long-beach has a big spend but NULL sq_ft -> cost/sqft NULL. (advanced-imaging's
+#    lease comes from the acquired dump.)
 def seed_leases():
     rows = [
         # site_id, annual_rent_usd, opex_usd_yr, start_date, end_date, lease_type
-        ["costa-mesa",     0,         18500000, "2018-01-01", "2038-01-01", "owned"],
-        ["atlanta-campus", 42000000,  9000000,  "2024-06-01", "2044-06-01", "owned"],   # ~$1B campus, sq_ft NULL -> cost/sqft NULL
-        ["austin-fab",     6200000,   2100000,  "2020-03-01", "2030-03-01", "leased"],
-        ["huntsville",     4800000,   1700000,  "2019-09-01", "2029-09-01", "leased"],
-        ["boston-rd",      2400000,   600000,   "2022-01-01", "2027-01-01", "leased"],
-        ["seattle-ops",    3600000,   900000,   "2021-05-01", "2031-05-01", "leased"],  # huge sq_ft -> very low $/sqft
-        ["phoenix-line",   2900000,   1100000,  "2023-02-01", "2033-02-01", "leased"],
+        ["arsenal-campus",   14000000, 5000000, "2023-01-01", "2031-12-01", "leased"],   # huge sqft -> low $/sqft
+        ["hq-flagship",      9000000,  3000000, "2017-01-01", "2037-01-01", "owned"],
+        ["long-beach",       30000000, 8000000, "2025-01-01", "2045-01-01", "owned"],    # big spend, sq_ft NULL -> cost NULL
+        ["srm-complex",      4000000,  1500000, "2019-06-01", "2039-06-01", "owned"],
+        ["maritime-systems", 3500000,  1200000, "2021-06-01", "2029-06-01", "leased"],
+        ["composites-uav",   3000000,  1000000, "2020-03-01", "2030-03-01", "leased"],
+        ["space-domain",     2500000,  900000,  "2022-01-01", "2032-01-01", "leased"],
+        ["seattle-hub",      4200000,  1300000, "2021-01-01", "2029-01-01", "leased"],
+        ["boston-maritime",  2400000,  700000,  "2022-03-01", "2028-03-01", "leased"],   # small office -> high $/sqft
     ]
     return _write("leases.csv",
                   ["site_id", "annual_rent_usd", "opex_usd_yr", "start_date", "end_date", "lease_type"],
@@ -78,119 +97,154 @@ def seed_leases():
 
 
 # -- hris_export.csv : headcount per site/program/quarter.
-#    Dirt: costa-mesa 2nd-quarter Anvil appears twice with conflicting totals (dedupe
-#    test); boston-rd first quarter uses MM/YYYY date drift ('12/2025'); one quantico
-#    row uses a bad code.
+#    Dirt: seattle-hub's 2026-Q1 Lattice OS row appears twice with conflicting totals
+#    (dedupe test); boston-maritime's first quarter uses MM/YYYY date drift ('12/2025');
+#    one acquired-site row uses a messy code ('Advanced Imaging').
 def seed_hris():
     rows = []
-    ramp = {  # costa-mesa ramps past its 12,000 seats by the last quarter
-        "Anvil":    [5000, 5800, 6600, 7600],
-        "Sentinel": [4000, 4400, 5000, 5800],
-    }
-    for prog, vals in ramp.items():
+    # arsenal ramps hard as Building 1 fills (engineering + production)
+    arsenal = {"Fury CCA": [2600, 2900, 3200, 3500], "Roadrunner": [1400, 1500, 1600, 1700]}
+    for prog, vals in arsenal.items():
         for q, hc in zip(QUARTERS, vals):
-            rows.append(["costa-mesa", q, prog, hc])
-    # the deliberate duplicate: conflicting 2026-Q1 Anvil number, correct value later
-    rows.append(["costa-mesa", "2026-Q1", "Anvil", 9999])   # bad dupe (will be superseded)
-    rows.append(["costa-mesa", "2026-Q1", "Anvil", 5800])   # canonical value, kept
+            rows.append(["arsenal-campus", q, prog, hc])
+    # seattle engineering hub: crammed past its 1,200 seats by the last quarter
+    for q, hc in zip(QUARTERS, [1100, 1200, 1300, 1400]):
+        rows.append(["seattle-hub", q, "Lattice OS", hc])
+    # the deliberate duplicate: conflicting 2026-Q1 Lattice OS number, correct value later
+    rows.append(["seattle-hub", "2026-Q1", "Lattice OS", 9999])   # bad dupe (will be superseded)
+    rows.append(["seattle-hub", "2026-Q1", "Lattice OS", 1200])   # canonical value, kept
 
     steady = {
-        "austin-fab":   ("Forge",      [2400, 2420, 2450, 2480]),
-        "huntsville":   ("Sentinel",   [2000, 2050, 2100, 2150]),
-        "boston-rd":    ("Lab",        [180,  185,  190,  195]),   # under-utilized vs 400 seats
-        "seattle-ops":  ("Logistics",  [300,  310,  320,  330]),
-        "phoenix-line": ("Anvil",      [600,  700,  800,  900]),
+        "hq-flagship":      ("Lattice OS",    [1900, 1950, 2000, 2050]),
+        "srm-complex":      ("SRM Supply",    [260,  290,  320,  350]),
+        "maritime-systems": ("Ghost Shark",   [430,  450,  470,  490]),
+        "composites-uav":   ("ALTIUS Series", [470,  500,  530,  560]),
+        "space-domain":     ("Space Ops",     [140,  160,  180,  200]),
+        "boston-maritime":  ("Ghost Shark",   [170,  175,  180,  185]),   # under-utilized vs 350 seats
     }
     for site, (prog, vals) in steady.items():
         for q, hc in zip(QUARTERS, vals):
-            # boston-rd's first quarter arrives as a MM/YYYY date instead of a quarter
-            # label ('12/2025' -> 2025-Q4), exercising the ETL's date normalization
-            qlabel = "12/2025" if (site == "boston-rd" and q == "2025-Q4") else q
+            # boston-maritime's first quarter arrives as a MM/YYYY date ('12/2025' -> 2025-Q4)
+            qlabel = "12/2025" if (site == "boston-maritime" and q == "2025-Q4") else q
             rows.append([site, qlabel, prog, hc])
-    # atlanta campus just beginning to staff up (partial data)
-    rows.append(["atlanta-campus", "2026-Q2", "Sentinel", 50])
-    rows.append(["atlanta-campus", "2026-Q3", "Sentinel", 200])
-    # acquired site headcount arrives with a messy code
-    rows.append(["Quantico Acq.", "2026-Q3", "Recon", 850])
+    # acquired site headcount arrives under a messy code (routes to advanced-imaging)
+    rows.append(["Advanced Imaging", "2026-Q3", "Sensor Integration", 95])
     return _write("hris_export.csv", ["site_id", "quarter", "program", "headcount"], rows)
 
 
 # -- mrp_export.csv : production demand on TWO constraints — floor space and power.
-#    phoenix-line is engineered to ramp into the wall, and to hit its POWER ceiling
-#    one quarter BEFORE its floor ceiling (the binding constraint is power).
+#    MODELING NOTE: at this scale a site's power/floor demand is a FACILITY-level
+#    figure (base load + energization dominates marginal per-unit draw), so each row
+#    is a per-quarter facility "production bundle" (units_planned = 1; the per-bundle
+#    footprint IS that quarter's demand, in sq ft and kW). Program-level detail lives
+#    in the programs table. arsenal-campus is engineered to hit its POWER ceiling one
+#    quarter BEFORE its floor ceiling — power is the binding constraint.
 def seed_mrp():
     rows = []
-    # phoenix FLOOR: 500 sqft/unit, units 240->300 => demanded 120k->150k vs 200k sq ft.
-    #   85% wall = 170k; growth = 10k/q => floor breach ~2 quarters out => 2027-Q1.
-    # phoenix POWER: 13 kW/unit, units 240->300 => demanded 3,120->3,900 kW vs 4,800 kW.
-    #   85% wall = 4,080 kW; growth = 260 kW/q => power breach ~1 quarter out => 2026-Q4.
-    #   => POWER is the binding constraint, hitting the wall before floor space.
-    for q, units in zip(QUARTERS, [240, 260, 280, 300]):
-        rows.append(["phoenix-line", q, "Anvil", units, 500, 13])
-    # everyone else: comfortably within both ceilings, flat (no collision on either)
-    flat = {
-        "costa-mesa":  ("Anvil",     1200, 1000, 10),   # 1.2M sqft / 12,000 kW
-        "austin-fab":  ("Forge",     1500, 200,  5),    # 300k sqft / 7,500 kW
-        "huntsville":  ("Sentinel",  1000, 150,  6),    # 150k sqft / 6,000 kW
-        "seattle-ops": ("Logistics", 2000, 50,   1),    # 100k sqft / 2,000 kW
-        "boston-rd":   ("Lab",       100,  100,  5),     # 10k sqft / 500 kW
+    # ARSENAL — the binding-constraint site.
+    #   POWER: 18,200 -> 22,400 kW (+1,400/q) vs 28,000 cap (85% wall = 23,800)
+    #          => power breach 1 quarter out => 2026-Q4. (current 22,400 = 80% utilized)
+    #   FLOOR: 646k -> 760k sq ft (+38k/q) vs 980k usable (Bldg 1; 85% wall = 833k)
+    #          => floor breach 2 quarters out => 2027-Q1. One-quarter gap, power first.
+    arsenal_floor = [646000, 684000, 722000, 760000]
+    arsenal_power = [18200, 19600, 21000, 22400]
+    for q, fl, pw in zip(QUARTERS, arsenal_floor, arsenal_power):
+        rows.append(["arsenal-campus", q, "Arsenal Production", 1, fl, pw])
+    # SRM COMPLEX — ramping 600 -> 6,000 motors/yr toward its 6,200 kW ceiling
+    #   (85% wall = 5,270). POWER 4,600 -> 4,960 kW (+120/q) => breach 2027-Q2 (a
+    #   'watch', further out than Arsenal). Floor stays flat (no floor collision).
+    srm_power = [4600, 4720, 4840, 4960]
+    for q, pw in zip(QUARTERS, srm_power):
+        rows.append(["srm-complex", q, "SRM Production", 1, 40000, pw])
+    # Everyone else operational: flat demand (no growth -> stable, no collision).
+    flat = {            # site: (floor_demand_sqft, power_demand_kw)
+        "hq-flagship":      (360000, 3400),
+        "maritime-systems": (60000, 1280),
+        "composites-uav":   (70000, 960),
+        "space-domain":     (30000, 2050),
+        "seattle-hub":      (40000, 720),
+        "boston-maritime":  (20000, 480),
     }
-    for site, (prog, units, spu, kw) in flat.items():
+    for site, (fl, pw) in flat.items():
         for q in QUARTERS:
-            rows.append([site, q, prog, units, spu, kw])
-    # atlanta campus has demand but its sq_ft AND power capacity are unknown
-    # (mid-buildout) -> 'capacity data pending' on both constraints
-    for q, units in zip(["2026-Q2", "2026-Q3"], [100, 200]):
-        rows.append(["atlanta-campus", q, "Sentinel", units, 400, 30])
+            rows.append([site, q, "Production", 1, fl, pw])
+    # long-beach is mid-construction: it already has a production PLAN, but its
+    # capacity is not yet provisioned (sq_ft + power NULL) -> the collision detector
+    # reports it as 'capacity data pending' instead of a false breach.
+    for q in QUARTERS:
+        rows.append(["long-beach", q, "Production (planned)", 1, 220000, 6000])
+    # advanced-imaging (acquired, mid-integration) carries NO production plan yet
+    # -> absent from the collision detector by design.
     return _write("mrp_export.csv",
                   ["site_id", "quarter", "program", "units_planned", "sqft_per_unit", "kw_per_unit"], rows)
 
 
-# -- erp_quality.csv : quality/CMMS issues. huntsville is the hot site.
-#    Dirt: one row points at 'tucson-line', a site that does not exist (orphan -> quarantine);
-#    one quantico row uses the 'QNTC' code.
+# -- programs.csv : the program registry. Maps each program to its primary (and
+#    optional secondary) site, with current/target quarterly output and the per-unit
+#    floor/power footprint of its line. Software programs carry NULL units. This is
+#    what turns a capacity collision into a PROGRAM problem (see vw_program_facility_risk).
+def seed_programs():
+    rows = [
+        # program_name, program_type, primary_site_id, secondary_site_id, status,
+        #   units_per_quarter_current, units_per_quarter_target, kw_per_unit, sqft_per_unit
+        ["Fury CCA",      "autonomous_aircraft",   "arsenal-campus",   "hq-flagship",  "production",  12,  37,  180, 8500],
+        ["Roadrunner",    "munitions",             "arsenal-campus",   "",             "production",  45,  120, 40,  800],
+        ["Barracuda",     "munitions",             "arsenal-campus",   "",             "development", 8,   60,  35,  700],
+        ["Ghost Shark",   "autonomous_underwater", "maritime-systems", "boston-maritime", "production", 18, 50, 220, 4200],
+        ["ALTIUS Series", "autonomous_aircraft",   "composites-uav",   "",             "development", 24,  80,  90,  2600],
+        ["Bolt",          "munitions",             "arsenal-campus",   "",             "development", 0,   200, 25,  400],
+        ["SRM Supply",    "munitions",             "srm-complex",      "",             "production",  480, 1500, 9,  120],
+        ["Lattice OS",    "c2_software",           "hq-flagship",      "seattle-hub",  "production",  "",  "",  "",  ""],
+    ]
+    return _write("programs.csv",
+                  ["program_name", "program_type", "primary_site_id", "secondary_site_id", "status",
+                   "units_per_quarter_current", "units_per_quarter_target", "kw_per_unit", "sqft_per_unit"], rows)
+
+
+# -- erp_quality.csv : quality/CMMS issues. maritime-systems is the hot site.
+#    Dirt: one row points at 'kona-test-range', a site in no registry (orphan ->
+#    quarantine); one acquired-site row uses the 'AIF' code.
 def seed_quality():
     rows = []
 
     def add(site, q, cat, sev, status, date, desc):
         rows.append([site, q, cat, sev, status, date, desc])
 
-    # huntsville — many issues, high severity, several still open
-    add("huntsville", "2025-Q4", "equipment", 5, "open",   "2025-11-11", "CNC spindle failure halting line 3")
-    add("huntsville", "2025-Q4", "safety",    4, "closed", "2025-12-02", "Forklift near-miss in receiving")
-    add("huntsville", "2026-Q1", "facility",  4, "open",   "2026-02-19", "Roof leak over clean assembly bay")
-    add("huntsville", "2026-Q1", "equipment", 5, "open",   "2026-03-04", "Test chamber HVAC out of spec")
-    add("huntsville", "2026-Q2", "supply",    3, "closed", "2026-05-21", "Solder paste lot rejected at incoming QA")
-    add("huntsville", "2026-Q2", "safety",    4, "open",   "2026-06-09", "Repeated eyewash station pressure fault")
-    add("huntsville", "2026-Q3", "equipment", 5, "open",   "2026-08-13", "Robotic arm calibration drift, scrap rate up")
-    add("huntsville", "2026-Q3", "facility",  3, "closed", "2026-09-01", "Loading dock door off track")
+    # maritime-systems — the quality hotspot (Ghost Shark production ramp pains)
+    add("maritime-systems", "2025-Q4", "equipment", 5, "open",   "2025-11-12", "Autoclave temperature excursion on hull cure")
+    add("maritime-systems", "2025-Q4", "safety",    4, "closed", "2025-12-03", "Crane load-test overdue in bay 2")
+    add("maritime-systems", "2026-Q1", "facility",  4, "open",   "2026-02-18", "Seawater test tank liner leak")
+    add("maritime-systems", "2026-Q1", "equipment", 5, "open",   "2026-03-05", "Ballast actuator failures, scrap up")
+    add("maritime-systems", "2026-Q2", "supply",    3, "closed", "2026-05-20", "Titanium lot rejected at incoming QA")
+    add("maritime-systems", "2026-Q2", "safety",    4, "open",   "2026-06-08", "Confined-space entry permit lapse")
+    add("maritime-systems", "2026-Q3", "equipment", 5, "open",   "2026-08-14", "Pressure-hull weld porosity recurring")
 
     # the rest — lighter load, mostly closed
-    add("costa-mesa",   "2026-Q2", "facility",  2, "closed", "2026-05-04", "HVAC zone imbalance, west wing")
-    add("costa-mesa",   "2026-Q3", "equipment", 3, "open",   "2026-07-22", "Conveyor sensor intermittent")
-    add("austin-fab",   "2026-Q1", "supply",    2, "closed", "2026-01-30", "Anodize bath chemistry off")
-    add("phoenix-line", "2026-Q3", "facility",  3, "open",   "2026-08-28", "Insufficient floor space staging WIP")  # foreshadows collision
-    add("seattle-ops",  "2026-Q2", "safety",    2, "closed", "2026-04-15", "Racking inspection finding")
-    add("boston-rd",    "2026-Q1", "equipment", 1, "closed", "2026-02-06", "Fume hood airflow low")
+    add("arsenal-campus",  "2026-Q2", "facility",  3, "open",   "2026-05-04", "WIP staging cramped on Line 1")  # foreshadows collision
+    add("arsenal-campus",  "2026-Q3", "equipment", 3, "open",   "2026-07-22", "Robotic riveter intermittent")
+    add("srm-complex",     "2026-Q2", "safety",    4, "closed", "2026-04-15", "Propellant mix room interlock fault")
+    add("hq-flagship",     "2026-Q1", "equipment", 2, "closed", "2026-01-30", "CMM calibration drift")
+    add("composites-uav",  "2026-Q2", "facility",  2, "closed", "2026-05-06", "Layup room humidity excursion")
+    add("space-domain",    "2026-Q3", "facility",  3, "open",   "2026-08-20", "Clean-room particle count high (integration)")
 
-    # acquired site, messy code
-    add("QNTC", "2026-Q3", "facility", 4, "open", "2026-09-09", "Generator transfer switch unreliable (inherited)")
+    # acquired site, messy code -> routes to advanced-imaging
+    add("AIF", "2026-Q3", "facility", 4, "open", "2026-09-09", "UPS transfer switch unreliable (inherited)")
     # ORPHAN: site that exists in no registry -> ETL must quarantine, not crash
-    add("tucson-line", "2026-Q2", "equipment", 3, "open", "2026-06-30", "Press brake overdue for PM (unknown site)")
+    add("kona-test-range", "2026-Q2", "equipment", 3, "open", "2026-06-30", "Telemetry rack overdue for PM (unknown site)")
 
     return _write("erp_quality.csv",
                   ["site_id", "quarter", "category", "severity", "status", "reported_date", "description"], rows)
 
 
-# -- acquired_site_dump.csv : the recently-acquired company's own facilities export.
-#    Different column names, and deliberately dirty: two rows for the SAME real site
-#    under different codes (QNTC vs quantico), one with NULL sq_ft/seats, rent as a
-#    formatted string, and one row denominated in CAD. This is the reconciliation muscle.
+# -- acquired_site_dump.csv : the recently-acquired Advanced Imaging Facility's own
+#    export. Different column names, and deliberately dirty: two rows for the SAME
+#    real site under different codes (AIF vs 'advanced imaging'), one with NULL sq_ft,
+#    rent formatted as a string, and one row denominated in CAD. The reconciliation muscle.
 def seed_acquired():
     rows = [
         # facility_code, facility_name, loc_region, gross_sq_ft, workstations, annual_rent, op_ex, currency, lease_kind
-        ["QNTC",     "Quantico Acq.",        "Mid-Atlantic", "",       "",    "$1,200,000", "$340,000", "USD", "leased"],
-        ["quantico", "Quantico Acquisition", "Mid-Atlantic", "145000", "850", "1,500,000",  "410,000",  "CAD", "leased"],
+        ["AIF",              "Advanced Imaging Facility", "Southeast", "",      "", "$1,200,000", "$340,000", "USD", "leased"],
+        ["advanced imaging", "Advanced Imaging Fac.",     "Southeast", "34000", "", "1,500,000",  "410,000",  "CAD", "leased"],
     ]
     return _write("acquired_site_dump.csv",
                   ["facility_code", "facility_name", "loc_region", "gross_sq_ft",
@@ -198,26 +252,25 @@ def seed_acquired():
 
 
 # -- actions.csv : the workflow layer. Each insight that needs a human becomes a
-#    trackable, OWNED, DATED action. Seeded open items: the Phoenix power-breach
-#    decision, both reconciliation exceptions (the CAD/USD conflict on quantico-acq
-#    and the tucson-line orphan, which has NO canonical site), and the Huntsville
-#    quality hotspot. created_at dates are fixed and chosen to span the age bands
-#    (green <30d, yellow 30-60d, red >60d) as viewed around mid-2026.
+#    trackable, OWNED, DATED action. Seeded open items: the Arsenal power-breach
+#    decision, both reconciliation exceptions (the CAD/USD conflict on advanced-imaging
+#    and the kona-test-range orphan, which has NO canonical site), and the maritime
+#    quality hotspot. created_at dates span the age bands as viewed around mid-2026.
 def seed_actions():
     rows = [
         # site_id, source, title, owner, due_date, status, resolution_note, created_at
-        ["phoenix-line", "collision",
-         "Phoenix POWER breach 2026-Q4 — decide: electrical upgrade vs. shift Anvil line",
-         "VP Facilities", "2026-06-30", "open", "", "2026-03-15"],          # ~red (>60d)
-        ["quantico-acq", "reconciliation",
-         "Sign off quantico-acq lease: USD $1.2M (kept) vs CAD $1.5M row",
-         "Lease Admin", "2026-06-20", "open", "", "2026-04-25"],            # ~yellow (30-60d)
+        ["arsenal-campus", "collision",
+         "Arsenal POWER breach 2026-Q4 — decide: substation upgrade vs. shift Roadrunner line",
+         "VP Facilities", "2026-07-31", "open", "", "2026-03-15"],         # ~red (>60d)
+        ["advanced-imaging", "reconciliation",
+         "Sign off advanced-imaging lease: USD $1.2M (kept) vs CAD $1.5M row",
+         "Lease Admin", "2026-06-20", "open", "", "2026-04-25"],           # ~yellow (30-60d)
         ["",             "reconciliation",
-         "Resolve orphan quality record for unknown site 'tucson-line'",
-         "Data Steward", "2026-06-18", "in_progress", "", "2026-04-30"],    # ~yellow, no canonical site
-        ["huntsville",   "quality",
-         "Huntsville recurring equipment failures — root-cause the scrap-rate trend",
-         "Quality Director", "2026-07-15", "open", "", "2026-05-20"],       # ~green (<30d)
+         "Resolve orphan quality record for unknown site 'kona-test-range'",
+         "Data Steward", "2026-06-18", "in_progress", "", "2026-04-30"],   # ~yellow, no canonical site
+        ["maritime-systems", "quality",
+         "Maritime pressure-hull weld porosity — root-cause the recurring scrap",
+         "Quality Director", "2026-07-15", "open", "", "2026-05-20"],      # ~green (<30d)
     ]
     return _write("actions.csv",
                   ["site_id", "source", "title", "owner", "due_date", "status",
@@ -226,8 +279,8 @@ def seed_actions():
 
 def main():
     paths = [
-        seed_sites(), seed_leases(), seed_hris(),
-        seed_mrp(), seed_quality(), seed_acquired(), seed_actions(),
+        seed_sites(), seed_leases(), seed_hris(), seed_mrp(),
+        seed_programs(), seed_quality(), seed_acquired(), seed_actions(),
     ]
     print("Seeded source-system exports:")
     for p in paths:

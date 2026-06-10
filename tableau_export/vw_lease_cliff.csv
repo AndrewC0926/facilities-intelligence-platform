@@ -1,9 +1,11 @@
 site_id,site_name,lease_expiration_date,lease_option_deadline,binding_constraint,binding_breach_quarter,breach_date,decision_window_days,cliff_status
-costa-mesa,Costa Mesa HQ & Flagship Factory,,,none,,,,no lease cliff
-atlanta-campus,Atlanta Innovation Campus,,,none,,,,no lease cliff
-austin-fab,Austin Fabrication,2030-03-01,2029-09-01,none,,,,no breach projected
-huntsville,Huntsville Integration,2029-09-01,2029-03-01,none,,,,no breach projected
-boston-rd,Boston R&D Lab,2027-01-01,2026-07-01,none,,,,no breach projected
-seattle-ops,Seattle Logistics & Warehouse,2031-05-01,2030-11-01,none,,,,no breach projected
-phoenix-line,Phoenix Production Line,2028-02-01,2026-08-02,power,2026-Q4,2026-10-01,60,AT RISK
-quantico-acq,Quantico Acq.,,,,,,,no lease cliff
+arsenal-campus,Arsenal Campus,2031-12-01,2026-08-02,power,2026-Q4,2026-10-01,60,AT RISK
+hq-flagship,HQ & Flagship Factory,,,none,,,,no lease cliff
+long-beach,Long Beach Campus,,,none,,,,no lease cliff
+srm-complex,Solid Rocket Motor Complex,,,power,2027-Q2,2027-04-01,,no lease cliff
+maritime-systems,Maritime Systems Factory,2029-06-01,2028-06-01,none,,,,no breach projected
+composites-uav,Composites & UAV Integration,2030-03-01,2029-09-01,none,,,,no breach projected
+space-domain,Space Domain Campus,,,none,,,,no lease cliff
+seattle-hub,Seattle Engineering Hub,2029-01-01,2028-07-01,none,,,,no breach projected
+boston-maritime,Boston Maritime Engineering,2028-03-01,2027-09-01,none,,,,no breach projected
+advanced-imaging,Advanced Imaging Facility,,,,,,,no lease cliff

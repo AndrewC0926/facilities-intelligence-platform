@@ -40,12 +40,13 @@ beyond `pip`.
 - One click produces a **dated executive brief** — headline risk, forecast, open
   items, and recommended moves — ready to forward.
 
-The headline example today: **Phoenix Production Line is projected to hit its power
-ceiling in 2026-Q4 — one quarter before it runs out of floor space (2027-Q1) — and
-its lease option deadline falls only 60 days before that wall.** Power, not square
-footage, is the binding constraint, and the real-estate clock is already running.
-FIP surfaces all three facts together and recommends shifting overflow to Costa
-Mesa (same region, ample slack).
+The headline example today: **Arsenal Campus — the flagship mega-factory (Building 1
+of 7 operational) — is projected to hit its power ceiling in 2026-Q4, one quarter
+before it runs out of floor space (2027-Q1), and its lease option deadline falls
+only 60 days before that wall.** Power, not square footage, is the binding
+constraint, and the real-estate clock is already running. FIP surfaces all three
+facts together, names the programs at risk (Fury CCA, Roadrunner, Barracuda, Bolt),
+and recommends shifting overflow to HQ & Flagship Factory (same region, ample slack).
 
 ---
 
@@ -54,7 +55,7 @@ Mesa (same region, ample slack).
 ```
 1. SOURCES   simulated exports → seeds/*.csv      (ERP/CMMS · MRP · HRIS · acquired-site dump)
 2. INGEST    fip/etl.py        → cleans & reconciles dirty data into one canonical model
-3. STORE     sql/schema.sql    → 6 normalized tables in SQLite (fip.db)
+3. STORE     sql/schema.sql    → 7 normalized tables in SQLite (fip.db)
 4. SEMANTIC  sql/views.sql     → documented SQL views = the business logic (THE PRODUCT)
 5. DELIVERY  app/dashboard.py  → reads the views (so does Tableau) · tableau_export/*.csv
 ```
@@ -75,10 +76,10 @@ make demo          # seed → build → reconcile → export → launch the dash
 ```
 
 `make demo` builds everything and serves the dashboard at `http://localhost:8501`.
-The dashboard is organized into tabs — Capacity & Scenario, Actions, Lease Cliff,
-Site Health, Quality & Cost, and a 30-second issue-intake form. It also
-self-bootstraps: point it at an empty checkout and it builds its own database on
-first launch.
+The dashboard is organized into tabs — Capacity & Scenario, Programs, Actions, Lease
+Cliff, Site Health, Reconciliation, Quality & Cost, and a 30-second issue-intake
+form. It also self-bootstraps: point it at an empty checkout and it builds its own
+database on first launch.
 
 Prefer the pieces individually:
 
@@ -86,7 +87,7 @@ Prefer the pieces individually:
 make pipeline      # build everything, no dashboard (writes the DB, the reconciliation
                    # report, and one clean CSV per view in tableau_export/)
 make dashboard     # serve the dashboard against an existing build
-make test          # run the full test suite (46 tests)
+make test          # run the full test suite (55 tests)
 ```
 
 And two things you can run straight from the terminal:
@@ -100,7 +101,7 @@ python -m fip.ask collision            # ask a one-off question against the live
 
 ## The semantic layer — what each view answers
 
-These nine SQL views *are* the product. Each one carries a comment block stating the
+These eleven SQL views *are* the product. Each one carries a comment block stating the
 business question, who asks it, and how often it refreshes.
 
 | View | The question it answers |
@@ -114,6 +115,8 @@ business question, who asks it, and how often it refreshes.
 | `vw_site_health` | One composite 0–100 health score per site, with its four underlying drivers. |
 | `vw_open_actions` | Which insights have become owned, dated work — and what's still open? |
 | `vw_reconciliation_status` | How cleanly did the acquired site fold in, and how many items still need a human? |
+| `vw_program_facility_risk` ★ | When a building hits a wall, **which programs does it stop, and how far short of target?** |
+| `vw_integration_pipeline` | Which acquired/buildout sites are still being stood up, and how complete is their data? |
 
 ### Worked example — the question → the view → the decision
 
@@ -126,13 +129,15 @@ and reports the quarter in which the **first** ceiling is crossed:
 
 | Site | Binding constraint | Breach quarter | Floor util | Power util |
 |---|---|---|---|---|
-| Phoenix Production Line | **POWER** | **2026-Q4** | 75% | 81% and climbing |
+| Arsenal Campus | **POWER** | **2026-Q4** | 78% | 80% and climbing |
 
-`vw_lease_cliff` then layers in the real-estate clock: Phoenix's lease option
+`vw_lease_cliff` then layers in the real-estate clock: Arsenal's lease option
 deadline lands **60 days** before that breach — well inside the 180-day comfort
-window — so the site is flagged **AT RISK**. The dashboard shows both as a red
-banner and drafts a stakeholder alert; the exec brief writes it up. That is the
-difference between *seeing* the wall and *deciding* before you hit it.
+window — so the site is flagged **AT RISK**. `vw_program_facility_risk` names the
+casualties — Fury CCA, Roadrunner, Barracuda and Bolt all build at Arsenal, so the
+power wall caps their unit targets. The dashboard shows all of this as a red banner
+and drafts a stakeholder alert; the exec brief writes it up. That is the difference
+between *seeing* the wall and *deciding* before you hit it.
 
 ---
 
@@ -144,7 +149,7 @@ Everything above is reporting. These are the capabilities that move FIP from
 **Multi-constraint capacity detection.** A factory rarely runs out of just one
 thing. FIP tracks two ceilings per site — floor square footage and electrical power
 — and always reports the **binding** one (whichever is hit first). The cheap
-constraint to miss is the one you weren't watching; for Phoenix, that's power.
+constraint to miss is the one you weren't watching; for Arsenal, that's power.
 
 **Scenario modeling.** A sidebar slider lets you scale any site's demand growth from
 0× to 3×. The projected breach quarter, the binding constraint, and the
@@ -185,26 +190,28 @@ the model directly from the terminal — and promote a useful query into a perma
 named view with a single flag:
 
 ```bash
-python -m fip.ask quality --site huntsville           # quality at one site
+python -m fip.ask quality --site maritime-systems     # quality at one site
 python -m fip.ask cost                                 # cost/sqft across the portfolio
-python -m fip.ask seats --site costa-mesa --quarter 2026-Q3
-python -m fip.ask collision --site phoenix-line --promote at_risk_sites
+python -m fip.ask seats --site seattle-hub --quarter 2026-Q3
+python -m fip.ask collision --site arsenal-campus --promote at_risk_sites
 ```
 
 ---
 
 ## Folding in an acquired site (the "special projects" muscle)
 
-Acquisitions never arrive clean. The `quantico-acq` site comes in the way real
-acquired data does — its own column names, three different spellings of the site
-code (`QNTC` / `quantico` / `Quantico Acq.`), a missing square footage, a rent
-formatted as `"$1,200,000"`, and a duplicate row denominated in Canadian dollars.
+Acquisitions never arrive clean. The recently-acquired `advanced-imaging` site
+(Advanced Imaging Facility) comes in the way real acquired data does — its own
+column names, different spellings of the site code (`AIF` / `advanced imaging`), a
+missing square footage, an un-audited power capacity, a rent formatted as
+`"$1,200,000"`, and a duplicate row denominated in Canadian dollars.
 
 FIP reconciles everything it safely can and routes the rest to an **exceptions
 queue** for a human — nothing is silently dropped or silently "fixed." Today that
 queue holds exactly **two** items awaiting a decision: the USD-vs-CAD rent conflict,
-and an orphaned quality record pointing at a site (`tucson-line`) that exists in no
-registry. Every build regenerates [`RECONCILIATION.md`](RECONCILIATION.md) so the
+and an orphaned quality record pointing at a site (`kona-test-range`) that exists in
+no registry. Newer acquisitions still being folded in are tracked to completion in
+`vw_integration_pipeline`. Every build regenerates [`RECONCILIATION.md`](RECONCILIATION.md) so the
 audit trail is always current.
 
 ---
@@ -246,14 +253,21 @@ owned action, to a funded decision.
 
 ---
 
-## The data model (6 tables)
+## The data model (7 tables)
+
+The portfolio is **10 sites** — a flagship mega-factory (Arsenal Campus), a campus
+under construction (Long Beach), a rocket-motor complex, an undersea-systems
+factory, three acquired sites at different stages of integration, and two
+engineering hubs — running **8 programs** (Fury CCA, Roadrunner, Barracuda, Ghost
+Shark, ALTIUS, Bolt, SRM Supply, Lattice OS).
 
 | Table | System of record | What it holds |
 |---|---|---|
-| `sites` | canonical registry | one row per facility — size, seats, power capacity, status, lease dates, provenance |
+| `sites` | canonical registry | one row per facility — size, seats, **power capacity (kW)**, lifecycle status, integration & lease dates, provenance |
+| `programs` | program registry | each program → its primary/secondary site, current vs. target quarterly output, per-unit floor & power footprint |
 | `leases` | real-estate / finance | annual rent + opex → drives cost per square foot |
 | `headcount_snapshots` | **HRIS** | assigned headcount per site/program/quarter |
-| `production_demand` | **MRP** | planned units × space-per-unit **and × power-per-unit** → demanded floor space + power |
+| `production_demand` | **MRP** | per-quarter facility demand → demanded floor space + power (kW) |
 | `quality_issues` | **ERP/CMMS** + intake form | quality/safety/facility issues, severity, status |
 | `actions` | workflow layer | owned, dated tasks generated from insights (collision / reconciliation / quality) |
 
@@ -271,5 +285,5 @@ fip/        seed.py etl.py reconcile.py          ← generate source data, clean
 app/        dashboard.py                          ← the Streamlit front end (presentation only)
 seeds/      *.csv   (the simulated source-system exports)
 tableau_export/  *.csv   (one clean extract per view — the Tableau handoff)
-tests/      46 tests across ingestion, every view, and all decision/workflow logic
+tests/      55 tests across ingestion, every view, and all decision/workflow logic
 ```

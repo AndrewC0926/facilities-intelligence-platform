@@ -445,6 +445,10 @@ FROM cliff;
 --                                              power_kw_capacity, region, site_type
 --                     A component with no data (e.g. unknown utilization or cost)
 --                     scores 0 — you can't credit headroom you can't see.
+--                     EXEMPTION: buildout and acquired_integrating sites are NOT
+--                     penalized on completeness — NULL fields there are expected, not
+--                     negligence. Their real completeness is surfaced separately in
+--                     vw_integration_pipeline.
 -- -----------------------------------------------------------------------------
 DROP VIEW IF EXISTS vw_site_health;
 CREATE VIEW vw_site_health AS
@@ -489,14 +493,19 @@ comp AS (
             WHEN cps.cost_per_sqft_usd <= m.median_cost THEN 100.0
             ELSE MAX(0.0, 100.0 - 100.0 * (cps.cost_per_sqft_usd - m.median_cost) / m.median_cost)
         END                                                                   AS cost_score,
-        -- 4. data completeness over 5 critical fields
-        20.0 * (
-            (s.sq_ft IS NOT NULL)
-          + (s.seat_capacity IS NOT NULL)
-          + (s.power_kw_capacity IS NOT NULL)
-          + (s.region IS NOT NULL)
-          + (s.site_type IS NOT NULL)
-        )                                                                     AS completeness_score
+        -- 4. data completeness over 5 critical fields. Buildout / acquired_integrating
+        --    sites are EXEMPT (expected NULLs) -> not penalized; flagged separately
+        --    in vw_integration_pipeline instead of dragging the health score.
+        CASE
+            WHEN s.site_status IN ('buildout', 'acquired_integrating') THEN 100.0
+            ELSE 20.0 * (
+                (s.sq_ft IS NOT NULL)
+              + (s.seat_capacity IS NOT NULL)
+              + (s.power_kw_capacity IS NOT NULL)
+              + (s.region IS NOT NULL)
+              + (s.site_type IS NOT NULL)
+            )
+        END                                                                   AS completeness_score
     FROM sites s
     CROSS JOIN med m
     LEFT JOIN quality q   ON q.site_id   = s.site_id
@@ -514,3 +523,89 @@ SELECT
     ROUND((capacity_score + quality_score + cost_score + completeness_score) / 4.0, 1)
                                  AS health_score
 FROM comp;
+
+
+-- =============================================================================
+-- PHASE 3 SCALE — PROGRAMS & INTEGRATION
+-- =============================================================================
+
+
+-- -----------------------------------------------------------------------------
+-- vw_program_facility_risk   ★ the "so what" of the collision detector ★
+-- -----------------------------------------------------------------------------
+-- BUSINESS QUESTION : "A building is about to hit a wall — so WHICH PROGRAMS does
+--                      that stop, how far short of their unit target, and how many
+--                      quarters until it bites?"
+-- WHO ASKS          : COO, Program leads, Capital planning.
+-- REFRESH CADENCE   : Weekly (rides the collision + program feeds).
+-- METHOD            : Join the program registry to the collision detector by the
+--                     program's primary site. Programs at the site whose binding
+--                     constraint is most urgent sort to the top — that is where a
+--                     facilities limit becomes a delivery-target miss.
+-- -----------------------------------------------------------------------------
+DROP VIEW IF EXISTS vw_program_facility_risk;
+CREATE VIEW vw_program_facility_risk AS
+SELECT
+    p.program_name,
+    p.program_type,
+    p.status                                    AS program_status,
+    p.primary_site_id                           AS site_id,
+    s.site_name,
+    p.units_per_quarter_current,
+    p.units_per_quarter_target,
+    c.binding_constraint,
+    c.binding_status,
+    c.binding_breach_quarter,
+    c.binding_quarters_to_wall                  AS quarters_to_constraint
+FROM programs p
+JOIN sites s ON s.site_id = p.primary_site_id
+LEFT JOIN vw_capacity_collision c ON c.site_id = p.primary_site_id
+ORDER BY (c.binding_quarters_to_wall IS NULL), c.binding_quarters_to_wall, p.program_name;
+
+
+-- -----------------------------------------------------------------------------
+-- vw_integration_pipeline
+-- -----------------------------------------------------------------------------
+-- BUSINESS QUESTION : "Which sites are still being stood up or folded in, how
+--                      complete is their data, and which integrations are stalling
+--                      (old but still missing the basics)?"
+-- WHO ASKS          : VP Facilities, Corp Dev / M&A integration, Data governance.
+-- REFRESH CADENCE   : Weekly.
+-- METHOD            : All non-operational sites (buildout + acquired_integrating).
+--                     Critical fields = sq_ft, seat_capacity, power_kw_capacity,
+--                     lease_expiration_date, lease_option_deadline. completeness_pct
+--                     = non-null/5*100. stalled_flag fires when the integration is
+--                     >12 months old AND completeness is still below 80% — a NULL
+--                     here is expected early, but not a year in.
+-- -----------------------------------------------------------------------------
+DROP VIEW IF EXISTS vw_integration_pipeline;
+CREATE VIEW vw_integration_pipeline AS
+WITH base AS (
+    SELECT
+        site_id,
+        site_name,
+        site_status,
+        integration_start_date,
+        ((sq_ft IS NULL) + (seat_capacity IS NULL) + (power_kw_capacity IS NULL)
+         + (lease_expiration_date IS NULL) + (lease_option_deadline IS NULL))  AS null_critical_fields,
+        20.0 * ((sq_ft IS NOT NULL) + (seat_capacity IS NOT NULL) + (power_kw_capacity IS NOT NULL)
+                + (lease_expiration_date IS NOT NULL) + (lease_option_deadline IS NOT NULL))
+                                                                               AS completeness_pct
+    FROM sites
+    WHERE site_status IN ('buildout', 'acquired_integrating')
+)
+SELECT
+    site_id,
+    site_name,
+    site_status,
+    integration_start_date,
+    null_critical_fields,
+    completeness_pct,
+    CASE
+        WHEN integration_start_date IS NOT NULL
+         AND (julianday('now') - julianday(integration_start_date)) > 365
+         AND completeness_pct < 80 THEN 1
+        ELSE 0
+    END                                                                        AS stalled_flag
+FROM base
+ORDER BY completeness_pct, site_id;

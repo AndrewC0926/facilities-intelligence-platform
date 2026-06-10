@@ -1,0 +1,9 @@
+program_name,program_type,program_status,site_id,site_name,units_per_quarter_current,units_per_quarter_target,binding_constraint,binding_status,binding_breach_quarter,quarters_to_constraint
+Barracuda,munitions,development,arsenal-campus,Arsenal Campus,8,60,power,COLLISION WARNING,2026-Q4,1
+Bolt,munitions,development,arsenal-campus,Arsenal Campus,0,200,power,COLLISION WARNING,2026-Q4,1
+Fury CCA,autonomous_aircraft,production,arsenal-campus,Arsenal Campus,12,37,power,COLLISION WARNING,2026-Q4,1
+Roadrunner,munitions,production,arsenal-campus,Arsenal Campus,45,120,power,COLLISION WARNING,2026-Q4,1
+SRM Supply,munitions,production,srm-complex,Solid Rocket Motor Complex,480,1500,power,watch,2027-Q2,3
+ALTIUS Series,autonomous_aircraft,development,composites-uav,Composites & UAV Integration,24,80,none,stable,,
+Ghost Shark,autonomous_underwater,production,maritime-systems,Maritime Systems Factory,18,50,none,stable,,
+Lattice OS,c2_software,production,hq-flagship,HQ & Flagship Factory,,,none,stable,,
