@@ -92,11 +92,13 @@ def load_sites(conn, report):
     canonical quantico-acq site + lease."""
     for r in _read_csv("sites_master.csv"):
         conn.execute(
-            "INSERT INTO sites VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO sites VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (r["site_id"], r["site_name"], r["region"],
              parse_int(r["sq_ft"]), parse_int(r["seat_capacity"]),
              parse_int(r["power_kw_capacity"]),
-             r["site_type"], r["status"], r["source_system"]),
+             r["site_type"], r["status"],
+             r["lease_expiration_date"] or None, r["lease_option_deadline"] or None,
+             r["source_system"]),
         )
 
     # --- reconcile acquired_site_dump.csv (two rows, one real site) -------------
@@ -133,10 +135,12 @@ def load_sites(conn, report):
             f"quantico-acq sq_ft/seats backfilled from sibling row ({sq_ft} sq ft, {seats} seats)")
 
     conn.execute(
-        "INSERT INTO sites VALUES (?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO sites VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         ("quantico-acq", name or "Quantico Acquisition", region or "Mid-Atlantic",
          sq_ft, seats, None,                    # power capacity not in the acquired dump
-         "factory", "acquired", "acquired_import"),
+         "factory", "acquired",
+         None, None,                            # lease dates pending sign-off on the acquired site
+         "acquired_import"),
     )
     conn.execute(
         "INSERT INTO leases (site_id, annual_rent_usd, opex_usd_yr, start_date, end_date, lease_type) "
@@ -216,6 +220,20 @@ def load_quality(conn, known, report):
         conn.execute("INSERT INTO quality_issues VALUES (?,?,?,?,?,?,?,?)", (i, *row))
 
 
+def load_actions(conn, known):
+    """Load the workflow actions. site_id is kept only if it resolves to a known
+    canonical site; an orphan action (e.g. the tucson-line record) carries NULL,
+    which is exactly why it still needs a human."""
+    for i, r in enumerate(_read_csv("actions.csv"), start=1):
+        raw_site = (r["site_id"] or "").strip()
+        site = canonicalize_code(raw_site, known) if raw_site else None
+        conn.execute(
+            "INSERT INTO actions VALUES (?,?,?,?,?,?,?,?,?)",
+            (i, site, r["source"], r["title"], r["owner"] or None,
+             r["due_date"] or None, r["status"], r["resolution_note"] or None,
+             r["created_at"] or None))
+
+
 def load_all(conn):
     """Run the full ingest into a freshly-schema'd connection. Returns a report dict."""
     report = {"actions": [], "conflicts": [], "exceptions": [],
@@ -226,6 +244,7 @@ def load_all(conn):
     load_headcount(conn, known, report)
     load_demand(conn, known, report)
     load_quality(conn, known, report)
+    load_actions(conn, known)
     conn.commit()
     return report
 

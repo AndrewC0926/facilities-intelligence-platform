@@ -20,6 +20,9 @@ PUBLISHED_VIEWS = [
     "vw_capacity_vs_demand",
     "vw_capacity_collision",
     "vw_reconciliation_status",
+    "vw_open_actions",
+    "vw_lease_cliff",
+    "vw_site_health",
 ]
 
 

@@ -19,7 +19,7 @@ import argparse
 import datetime
 import os
 
-from fip import db, scenario
+from fip import actions, db, scenario
 
 
 def _ensure_db():
@@ -111,6 +111,7 @@ def render(conn=None, today=None, multipliers=None):
         recon = db.query(conn, "SELECT * FROM vw_reconciliation_status")[0]
         exceptions = db.query(
             conn, "SELECT source_file, reason FROM etl_exceptions ORDER BY exception_id")
+        action_summary = actions.summary(conn, today)
     finally:
         if own:
             conn.close()
@@ -128,7 +129,7 @@ def render(conn=None, today=None, multipliers=None):
                              + ", ".join(f"{k}×{v:g}" for k, v in active.items()) + "._\n")
 
     md = f"""# Facilities Intelligence — Executive Brief
-_Generated {today.isoformat()} from the live semantic views (`vw_capacity_collision`, `vw_reconciliation_status`)._
+_Generated {today.isoformat()} from the live semantic views (`vw_capacity_collision`, `vw_reconciliation_status`, `vw_open_actions`)._
 {scenario_note}
 ## Headline risk
 
@@ -148,7 +149,17 @@ power. The binding constraint is whichever wall is hit first.
 """
     for e in exceptions:
         md += f"  - `{e['source_file']}` — {e['reason']}\n"
+
+    if action_summary["oldest_age_days"] is not None:
+        aging = (f"the oldest unresolved item is **{action_summary['oldest_age_days']} days** "
+                 f"old ({action_summary['oldest_site']} — {action_summary['oldest_title']})")
+    else:
+        aging = "no aging items"
     md += f"""
+## Action tracker
+
+- **{action_summary['open_count']}** open action(s) being tracked; {aging}.
+
 ## Recommended actions
 
 {_actions(at_risk, rows, recon, exceptions)}

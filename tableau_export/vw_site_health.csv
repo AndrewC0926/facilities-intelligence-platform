@@ -1,0 +1,9 @@
+site_id,site_name,region,capacity_score,quality_score,cost_score,completeness_score,health_score
+costa-mesa,Costa Mesa HQ & Flagship Factory,West,76.0,88.0,100.0,100.0,91.0
+atlanta-campus,Atlanta Innovation Campus,Southeast,0.0,100.0,0.0,40.0,35.0
+austin-fab,Austin Fabrication,Central,62.5,100.0,100.0,100.0,90.6
+huntsville,Huntsville Integration,Southeast,60.0,0.0,98.0,100.0,64.5
+boston-rd,Boston R&D Lab,Northeast,66.7,100.0,0.0,100.0,66.7
+seattle-ops,Seattle Logistics & Warehouse,West,75.0,100.0,100.0,100.0,93.8
+phoenix-line,Phoenix Production Line,West,18.7,88.0,11.7,100.0,54.6
+quantico-acq,Quantico Acq.,Mid-Atlantic,0.0,80.0,100.0,80.0,65.0

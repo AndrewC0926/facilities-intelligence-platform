@@ -15,6 +15,7 @@
 
 PRAGMA foreign_keys = ON;
 
+DROP TABLE IF EXISTS actions;
 DROP TABLE IF EXISTS quality_issues;
 DROP TABLE IF EXISTS production_demand;
 DROP TABLE IF EXISTS headcount_snapshots;
@@ -26,15 +27,17 @@ DROP TABLE IF EXISTS sites;
 -- agrees on; source_system records provenance so an acquired site that was
 -- reconciled in is distinguishable from a clean canonical record.
 CREATE TABLE sites (
-    site_id            TEXT PRIMARY KEY,      -- e.g. 'costa-mesa'
-    site_name          TEXT NOT NULL,         -- 'Costa Mesa HQ & Flagship Factory'
-    region             TEXT,                  -- 'West' | 'Central' | 'Southeast'
-    sq_ft              INTEGER,               -- gross square feet (NULL = unknown, e.g. mid-buildout)
-    seat_capacity      INTEGER,               -- desks/stations the building supports
-    power_kw_capacity  INTEGER,               -- electrical service ceiling, kW (NULL = unknown, e.g. mid-buildout)
-    site_type          TEXT,                  -- 'factory' | 'campus' | 'office' | 'warehouse'
-    status             TEXT,                  -- 'operational' | 'buildout' | 'acquired'
-    source_system      TEXT NOT NULL DEFAULT 'canonical'  -- 'canonical' | 'acquired_import'
+    site_id                TEXT PRIMARY KEY,      -- e.g. 'costa-mesa'
+    site_name              TEXT NOT NULL,         -- 'Costa Mesa HQ & Flagship Factory'
+    region                 TEXT,                  -- 'West' | 'Central' | 'Southeast'
+    sq_ft                  INTEGER,               -- gross square feet (NULL = unknown, e.g. mid-buildout)
+    seat_capacity          INTEGER,               -- desks/stations the building supports
+    power_kw_capacity      INTEGER,               -- electrical service ceiling, kW (NULL = unknown, e.g. mid-buildout)
+    site_type              TEXT,                  -- 'factory' | 'campus' | 'office' | 'warehouse'
+    status                 TEXT,                  -- 'operational' | 'buildout' | 'acquired'
+    lease_expiration_date  TEXT,                  -- ISO 'YYYY-MM-DD' (NULL for owned sites / unknown)
+    lease_option_deadline  TEXT,                  -- ISO 'YYYY-MM-DD': last day to exercise a renew/expand option
+    source_system          TEXT NOT NULL DEFAULT 'canonical'  -- 'canonical' | 'acquired_import'
 );
 
 -- Cost layer. $/sq ft is derived downstream from (annual_rent + opex) / sq_ft.
@@ -91,4 +94,21 @@ CREATE TABLE etl_exceptions (
     source_file   TEXT,
     raw_row       TEXT,                        -- the offending row, as-received
     reason        TEXT                         -- why it was quarantined
+);
+
+-- Workflow layer: trackable actions generated from insights. Every open item has
+-- an owner and a due date, so an analytic finding (a collision warning, a
+-- reconciliation exception, a quality hotspot) becomes a task someone owns rather
+-- than a chart someone forgets. site_id is nullable: an orphan-record action
+-- references no real site (that is exactly why it is an exception).
+CREATE TABLE actions (
+    action_id        INTEGER PRIMARY KEY,
+    site_id          TEXT REFERENCES sites(site_id),  -- NULL = no canonical site (e.g. an orphan record)
+    source           TEXT,                            -- 'collision' | 'reconciliation' | 'quality'
+    title            TEXT NOT NULL,
+    owner            TEXT,                             -- accountable person/role
+    due_date         TEXT,                             -- ISO 'YYYY-MM-DD'
+    status           TEXT,                             -- 'open' | 'in_progress' | 'resolved'
+    resolution_note  TEXT,                             -- filled when resolved
+    created_at       TEXT                              -- ISO 'YYYY-MM-DD' the action was opened
 );

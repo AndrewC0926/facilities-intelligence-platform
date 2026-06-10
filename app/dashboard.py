@@ -19,7 +19,7 @@ import pandas as pd
 import streamlit as st
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from fip import brief, db, scenario  # noqa: E402  -- presentation calls into the logic layer
+from fip import actions, brief, db, notify, scenario  # noqa: E402  -- presentation calls into the logic layer
 
 
 def load(view_or_sql):
@@ -71,94 +71,186 @@ if any(m != 1.0 for m in multipliers.values()):
 
 scenario_rows = scenario.apply(base_collision, multipliers)
 
-# --- Collision detector: the headline alert -----------------------------------
-st.header("⚠️ Capacity Collision Detector")
-st.caption("Source view: `vw_capacity_collision` (+ `fip.scenario`) — projects MRP "
-           "demand growth on TWO ceilings (floor sq ft and power kW) and warns ~2 "
-           "quarters before whichever one binds first.")
-warnings = sorted(
-    [r for r in scenario_rows if r["binding_status"] in ("COLLISION WARNING", "AT THE WALL NOW")],
-    key=lambda r: r["binding_quarters_to_wall"])
-if warnings:
-    for r in warnings:
-        mult = "" if r["growth_multiplier"] == 1.0 else f" (growth ×{r['growth_multiplier']:g})"
+today = datetime.date.today()
+cliff_rows = load_rows("SELECT * FROM vw_lease_cliff")
+
+tab_cap, tab_actions, tab_lease, tab_health, tab_quality, tab_intake = st.tabs([
+    "⚠️ Capacity & Scenario", "✅ Actions", "📅 Lease Cliff",
+    "💚 Site Health", "🧪 Quality & Cost", "📝 Report Issue"])
+
+# === Tab: Capacity & Scenario =================================================
+with tab_cap:
+    st.subheader("Capacity Collision Detector")
+    st.caption("Source view: `vw_capacity_collision` (+ `fip.scenario`) — projects MRP "
+               "demand growth on TWO ceilings (floor sq ft and power kW) and warns ~2 "
+               "quarters before whichever one binds first.")
+    warnings = sorted(
+        [r for r in scenario_rows if r["binding_status"] in ("COLLISION WARNING", "AT THE WALL NOW")],
+        key=lambda r: r["binding_quarters_to_wall"])
+    if warnings:
+        for r in warnings:
+            mult = "" if r["growth_multiplier"] == 1.0 else f" (growth ×{r['growth_multiplier']:g})"
+            st.error(
+                f"**{r['site_name']}** — binding constraint **{r['binding_constraint'].upper()}**, "
+                f"{r['binding_status']}{mult}. Projected to cross 85% of its "
+                f"{r['binding_constraint']} ceiling in **{r['binding_breach_quarter']}**. "
+                f"Floor utilization {r['current_util_pct']}% · "
+                f"power utilization {r['power_util_pct']}%.")
+            rec = scenario.recommend_relocation(scenario_rows, r["site_id"])
+            if rec:
+                where = "same region" if rec["same_region"] else f"{rec['region']} region"
+                st.info(
+                    f"↳ **Relocation candidate: {rec['site_name']}** ({where}) — "
+                    f"{rec['slack']:,} {rec['unit']} of slack below its wall, enough to absorb "
+                    f"the ~{rec['overflow']:,} {rec['unit']} of {r['site_name']} overflow.")
+    else:
+        st.success("No imminent capacity collisions at the current scenario.")
+    st.dataframe(pd.DataFrame(scenario_rows), use_container_width=True, hide_index=True)
+
+    # --- Stakeholder notification draft (copy-paste only) ---------------------
+    owners = {a["site_id"]: a["owner"] for a in load_rows("SELECT site_id, owner FROM actions")}
+    alerts = notify.build_alerts(scenario_rows, cliff_rows, owners=owners)
+    if alerts:
+        st.markdown("---")
+        st.subheader("📣 Draft stakeholder alert")
+        st.caption("A collision warning or lease-cliff AT RISK flag is active. Draft a "
+                   "structured, copy-paste heads-up — FIP sends nothing.")
+        names = {a["site_id"]: a["site_name"] for a in alerts}
+        if len(alerts) > 1:
+            sel = st.selectbox("Site", [a["site_id"] for a in alerts],
+                               format_func=lambda s: names[s])
+        else:
+            sel = alerts[0]["site_id"]
+        if st.button("Draft stakeholder alert"):
+            st.code(next(a["text"] for a in alerts if a["site_id"] == sel), language="text")
+
+    # --- Exec brief generator -------------------------------------------------
+    st.markdown("---")
+    st.subheader("📄 Executive brief")
+    st.caption("A dated one-pager built from the live views (same content as "
+               "`python -m fip.brief`), reflecting the current scenario.")
+    if st.button("Generate exec brief"):
+        md = brief.render(multipliers=multipliers)
+        st.download_button("⬇️ Download brief (.md)", md,
+                           file_name=f"fip-exec-brief-{today.isoformat()}.md",
+                           mime="text/markdown")
+        st.markdown(md)
+
+# === Tab: Actions =============================================================
+with tab_actions:
+    st.subheader("Open actions")
+    st.caption("Source: `vw_open_actions` (+ `fip.actions`). Color = age: "
+               "🟢 <30 days · 🟡 30–60 days · 🔴 >60 days. Every open item has an owner and a due date.")
+    conn = db.connect()
+    acts = actions.open_actions(conn, today)
+    conn.close()
+    if acts:
+        counts = {"green": 0, "yellow": 0, "red": 0, "unknown": 0}
+        for a in acts:
+            counts[a["age_band"]] = counts.get(a["age_band"], 0) + 1
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Open", len(acts))
+        m2.metric("🟢 <30d", counts["green"])
+        m3.metric("🟡 30–60d", counts["yellow"])
+        m4.metric("🔴 >60d", counts["red"])
+        df = pd.DataFrame(acts)[["site_name", "source", "title", "owner",
+                                 "due_date", "status", "age_days", "age_band"]]
+        bg = {"green": "background-color:#d4edda", "yellow": "background-color:#fff3cd",
+              "red": "background-color:#f8d7da", "unknown": ""}
+        styled = df.style.apply(lambda row: [bg.get(row["age_band"], "")] * len(row), axis=1)
+        st.dataframe(styled, use_container_width=True, hide_index=True)
+    else:
+        st.success("No open actions — every insight has been resolved.")
+
+# === Tab: Lease Cliff =========================================================
+with tab_lease:
+    st.subheader("Lease cliff calendar")
+    st.caption("Source: `vw_lease_cliff` — days between the lease option deadline and the "
+               "projected capacity breach. A window < 180 days ⇒ **AT RISK** (you'd commit "
+               "to a lease before you know the site fits).")
+    at_risk = [r for r in cliff_rows if r["cliff_status"] == "AT RISK"]
+    for r in at_risk:
         st.error(
-            f"**{r['site_name']}** — binding constraint **{r['binding_constraint'].upper()}**, "
-            f"{r['binding_status']}{mult}. Projected to cross 85% of its "
-            f"{r['binding_constraint']} ceiling in **{r['binding_breach_quarter']}**. "
-            f"Floor utilization {r['current_util_pct']}% · "
-            f"power utilization {r['power_util_pct']}%.")
-        rec = scenario.recommend_relocation(scenario_rows, r["site_id"])
-        if rec:
-            where = "same region" if rec["same_region"] else f"{rec['region']} region"
-            st.info(
-                f"↳ **Relocation candidate: {rec['site_name']}** ({where}) — "
-                f"{rec['slack']:,} {rec['unit']} of slack below its wall, enough to absorb "
-                f"the ~{rec['overflow']:,} {rec['unit']} of {r['site_name']} overflow.")
-else:
-    st.success("No imminent capacity collisions at the current scenario.")
-st.dataframe(pd.DataFrame(scenario_rows), use_container_width=True, hide_index=True)
+            f"**{r['site_name']}** — AT RISK: only **{r['decision_window_days']} days** "
+            f"between the lease option deadline ({r['lease_option_deadline']}) and the "
+            f"projected {r['binding_constraint']} breach ({r['binding_breach_quarter']}, "
+            f"~{r['breach_date']}).")
+    if not at_risk:
+        st.success("No lease cliffs inside the 180-day decision window.")
+    cdf = pd.DataFrame(cliff_rows)
+    st.dataframe(cdf, use_container_width=True, hide_index=True)
+    windows = cdf.dropna(subset=["decision_window_days"])
+    if not windows.empty:
+        st.caption("Decision window in days (shorter bar = more urgent)")
+        st.bar_chart(windows.set_index("site_name")["decision_window_days"])
 
-# --- Exec brief generator -----------------------------------------------------
-st.header("📄 Executive brief")
-st.caption("A dated one-pager built from the live views (same content as "
-           "`python -m fip.brief`), reflecting the current scenario.")
-if st.button("Generate exec brief"):
-    md = brief.render(multipliers=multipliers)
-    st.download_button("⬇️ Download brief (.md)", md,
-                       file_name=f"fip-exec-brief-{datetime.date.today().isoformat()}.md",
-                       mime="text/markdown")
-    st.markdown(md)
+# === Tab: Site Health =========================================================
+with tab_health:
+    st.subheader("Site health scorecard")
+    st.caption("Source: `vw_site_health` — composite 0–100 = equal-weight average of four "
+               "components: capacity headroom, quality, cost efficiency (vs portfolio median), "
+               "and data completeness. Expand a site for its breakdown.")
+    health = load("SELECT * FROM vw_site_health ORDER BY health_score DESC")
+    st.bar_chart(health.set_index("site_name")["health_score"])
+    st.dataframe(health, use_container_width=True, hide_index=True)
+    for _, r in health.iterrows():
+        with st.expander(f"{r['site_name']} — health {r['health_score']}/100"):
+            b1, b2, b3, b4 = st.columns(4)
+            b1.metric("Capacity headroom", r["capacity_score"])
+            b2.metric("Quality", r["quality_score"])
+            b3.metric("Cost efficiency", r["cost_score"])
+            b4.metric("Data completeness", r["completeness_score"])
 
-# --- Three exec questions, side by side ---------------------------------------
-c1, c2 = st.columns(2)
+# === Tab: Quality & Cost ======================================================
+with tab_quality:
+    c1, c2 = st.columns(2)
+    with c1:
+        st.subheader("🧪 Quality by site")
+        st.caption("Source view: `vw_quality_by_site_quarter`")
+        quality = load("SELECT * FROM vw_quality_by_site_quarter ORDER BY open_count DESC, avg_severity DESC")
+        by_site = quality.groupby("site_name").agg(
+            open_issues=("open_count", "sum"),
+            avg_severity=("avg_severity", "mean"),
+            total_issues=("issue_count", "sum")).reset_index().sort_values("open_issues", ascending=False)
+        st.bar_chart(by_site.set_index("site_name")["open_issues"])
+        st.dataframe(quality, use_container_width=True, hide_index=True)
+    with c2:
+        st.subheader("💲 Cost per square foot")
+        st.caption("Source view: `vw_cost_per_sqft`")
+        cost = load("SELECT * FROM vw_cost_per_sqft ORDER BY cost_per_sqft_usd")
+        plot = cost.dropna(subset=["cost_per_sqft_usd"])
+        st.bar_chart(plot.set_index("site_name")["cost_per_sqft_usd"])
+        st.dataframe(cost, use_container_width=True, hide_index=True)
 
-with c1:
-    st.header("🧪 Quality by site")
-    st.caption("Source view: `vw_quality_by_site_quarter`")
-    quality = load("SELECT * FROM vw_quality_by_site_quarter ORDER BY open_count DESC, avg_severity DESC")
-    by_site = quality.groupby("site_name").agg(
-        open_issues=("open_count", "sum"),
-        avg_severity=("avg_severity", "mean"),
-        total_issues=("issue_count", "sum")).reset_index().sort_values("open_issues", ascending=False)
-    st.bar_chart(by_site.set_index("site_name")["open_issues"])
-    st.dataframe(quality, use_container_width=True, hide_index=True)
+    st.subheader("🪑 Headcount vs. seats")
+    st.caption("Source view: `vw_headcount_vs_seats` — over capacity = people with no desk; "
+               "under-utilized = paying for empty seats.")
+    seats = load("SELECT * FROM vw_headcount_vs_seats ORDER BY quarter, seat_utilization_pct DESC")
+    st.dataframe(seats[seats["quarter"] == seats["quarter"].max()],
+                 use_container_width=True, hide_index=True)
 
-with c2:
-    st.header("💲 Cost per square foot")
-    st.caption("Source view: `vw_cost_per_sqft`")
-    cost = load("SELECT * FROM vw_cost_per_sqft ORDER BY cost_per_sqft_usd")
-    plot = cost.dropna(subset=["cost_per_sqft_usd"])
-    st.bar_chart(plot.set_index("site_name")["cost_per_sqft_usd"])
-    st.dataframe(cost, use_container_width=True, hide_index=True)
-
-st.header("🪑 Headcount vs. seats")
-st.caption("Source view: `vw_headcount_vs_seats` — over capacity = people with no desk; "
-           "under-utilized = paying for empty seats.")
-seats = load("SELECT * FROM vw_headcount_vs_seats ORDER BY quarter, seat_utilization_pct DESC")
-latest_q = seats["quarter"].max()
-st.dataframe(seats[seats["quarter"] == latest_q], use_container_width=True, hide_index=True)
-
-# --- 30-second quality intake form --------------------------------------------
-st.header("📝 Report a quality issue (30 seconds)")
-st.caption("Writes a structured row straight into `quality_issues` — the same table "
-           "the ERP/CMMS feed lands in.")
-sites = load("SELECT site_id, site_name FROM sites ORDER BY site_name")
-with st.form("intake", clear_on_submit=True):
-    fc1, fc2, fc3 = st.columns(3)
-    site = fc1.selectbox("Site", sites["site_id"],
-                         format_func=lambda sid: sites.set_index("site_id").loc[sid, "site_name"])
-    quarter = fc1.text_input("Quarter", value=str(latest_q))
-    category = fc2.selectbox("Category", ["facility", "equipment", "safety", "supply"])
-    severity = fc2.slider("Severity", 1, 5, 3)
-    reported = fc3.date_input("Reported date")
-    desc = st.text_input("What happened?")
-    if st.form_submit_button("Submit issue"):
-        conn = db.connect()
-        nid = db.query(conn, "SELECT COALESCE(MAX(issue_id),0)+1 AS n FROM quality_issues")[0]["n"]
-        conn.execute(
-            "INSERT INTO quality_issues VALUES (?,?,?,?,?,?,?,?)",
-            (nid, site, quarter, category, severity, "open", str(reported), desc))
-        conn.commit()
-        conn.close()
-        st.success(f"Logged issue #{nid} at {site}. Refresh to see it flow through the views.")
+# === Tab: Report Issue ========================================================
+with tab_intake:
+    st.subheader("📝 Report a quality issue (30 seconds)")
+    st.caption("Writes a structured row straight into `quality_issues` — the same table "
+               "the ERP/CMMS feed lands in.")
+    sites = load("SELECT site_id, site_name FROM sites ORDER BY site_name")
+    latest_q = load_rows("SELECT MAX(quarter) AS q FROM headcount_snapshots")[0]["q"]
+    with st.form("intake", clear_on_submit=True):
+        fc1, fc2, fc3 = st.columns(3)
+        site = fc1.selectbox("Site", sites["site_id"],
+                             format_func=lambda sid: sites.set_index("site_id").loc[sid, "site_name"])
+        quarter = fc1.text_input("Quarter", value=str(latest_q))
+        category = fc2.selectbox("Category", ["facility", "equipment", "safety", "supply"])
+        severity = fc2.slider("Severity", 1, 5, 3)
+        reported = fc3.date_input("Reported date")
+        desc = st.text_input("What happened?")
+        if st.form_submit_button("Submit issue"):
+            conn = db.connect()
+            nid = db.query(conn, "SELECT COALESCE(MAX(issue_id),0)+1 AS n FROM quality_issues")[0]["n"]
+            conn.execute(
+                "INSERT INTO quality_issues VALUES (?,?,?,?,?,?,?,?)",
+                (nid, site, quarter, category, severity, "open", str(reported), desc))
+            conn.commit()
+            conn.close()
+            st.success(f"Logged issue #{nid} at {site}. Refresh to see it flow through the views.")

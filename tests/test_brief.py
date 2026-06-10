@@ -53,3 +53,11 @@ def test_brief_scenario_note_appears_under_multiplier(built_db):
     scen = brief.render(conn=conn, today=datetime.date(2026, 6, 10),
                         multipliers={"phoenix-line": 3.0})
     assert "Scenario applied" in scen
+
+
+def test_brief_action_tracker_reports_count_and_oldest_age(built_db):
+    conn, _ = built_db
+    md = brief.render(conn=conn, today=datetime.date(2026, 6, 10))
+    assert "## Action tracker" in md
+    assert "**4** open action(s)" in md
+    assert "**87 days**" in md          # oldest unresolved item age, relative to the fixed today

@@ -35,19 +35,23 @@ def _write(name, header, rows):
 
 
 # -- sites_master.csv : the 7 clean canonical sites (quantico arrives dirty, separately)
+#    Lease dates drive the lease-cliff calendar. Owned sites have no lease cliff
+#    (NULL dates). phoenix-line's option deadline is set 60 days before its 2026-Q1
+#    POWER breach -> an urgent "decide before the wall" flag (decision window < 180d).
 def seed_sites():
     rows = [
-        # site_id, site_name, region, sq_ft, seat_capacity, power_kw_capacity, site_type, status, source_system
-        ["costa-mesa",     "Costa Mesa HQ & Flagship Factory", "West",      5000000, 12000, 60000, "factory",   "operational", "canonical"],
-        ["atlanta-campus", "Atlanta Innovation Campus",        "Southeast", "",      "",    "",    "campus",    "buildout",    "canonical"],
-        ["austin-fab",     "Austin Fabrication",               "Central",   800000,  3000,  20000, "factory",   "operational", "canonical"],
-        ["huntsville",     "Huntsville Integration",           "Southeast", 600000,  2500,  15000, "factory",   "operational", "canonical"],
-        ["boston-rd",      "Boston R&D Lab",                   "Northeast", 60000,   400,   1500,  "office",    "operational", "canonical"],
-        ["seattle-ops",    "Seattle Logistics & Warehouse",    "West",      1200000, 500,   8000,  "warehouse", "operational", "canonical"],
-        ["phoenix-line",   "Phoenix Production Line",          "West",      200000,  1200,  4800,  "factory",   "operational", "canonical"],
+        # site_id, site_name, region, sq_ft, seat_capacity, power_kw_capacity, site_type, status, lease_expiration_date, lease_option_deadline, source_system
+        ["costa-mesa",     "Costa Mesa HQ & Flagship Factory", "West",      5000000, 12000, 60000, "factory",   "operational", "",           "",           "canonical"],  # owned: no lease cliff
+        ["atlanta-campus", "Atlanta Innovation Campus",        "Southeast", "",      "",    "",    "campus",    "buildout",    "",           "",           "canonical"],  # owned: no lease cliff
+        ["austin-fab",     "Austin Fabrication",               "Central",   800000,  3000,  20000, "factory",   "operational", "2030-03-01", "2029-09-01", "canonical"],
+        ["huntsville",     "Huntsville Integration",           "Southeast", 600000,  2500,  15000, "factory",   "operational", "2029-09-01", "2029-03-01", "canonical"],
+        ["boston-rd",      "Boston R&D Lab",                   "Northeast", 60000,   400,   1500,  "office",    "operational", "2027-01-01", "2026-07-01", "canonical"],
+        ["seattle-ops",    "Seattle Logistics & Warehouse",    "West",      1200000, 500,   8000,  "warehouse", "operational", "2031-05-01", "2030-11-01", "canonical"],
+        ["phoenix-line",   "Phoenix Production Line",          "West",      200000,  1200,  4800,  "factory",   "operational", "2028-02-01", "2025-11-02", "canonical"],  # option deadline 60d before 2026-Q1 power breach
     ]
     return _write("sites_master.csv",
-                  ["site_id", "site_name", "region", "sq_ft", "seat_capacity", "power_kw_capacity", "site_type", "status", "source_system"],
+                  ["site_id", "site_name", "region", "sq_ft", "seat_capacity", "power_kw_capacity", "site_type", "status",
+                   "lease_expiration_date", "lease_option_deadline", "source_system"],
                   rows)
 
 
@@ -187,10 +191,37 @@ def seed_acquired():
                    "workstations", "annual_rent", "op_ex", "currency", "lease_kind"], rows)
 
 
+# -- actions.csv : the workflow layer. Each insight that needs a human becomes a
+#    trackable, OWNED, DATED action. Seeded open items: the Phoenix power-breach
+#    decision, both reconciliation exceptions (the CAD/USD conflict on quantico-acq
+#    and the tucson-line orphan, which has NO canonical site), and the Huntsville
+#    quality hotspot. created_at dates are fixed and chosen to span the age bands
+#    (green <30d, yellow 30-60d, red >60d) as viewed around mid-2026.
+def seed_actions():
+    rows = [
+        # site_id, source, title, owner, due_date, status, resolution_note, created_at
+        ["phoenix-line", "collision",
+         "Phoenix POWER breach 2026-Q1 — decide: electrical upgrade vs. shift Anvil line",
+         "VP Facilities", "2026-06-30", "open", "", "2026-03-15"],          # ~red (>60d)
+        ["quantico-acq", "reconciliation",
+         "Sign off quantico-acq lease: USD $1.2M (kept) vs CAD $1.5M row",
+         "Lease Admin", "2026-06-20", "open", "", "2026-04-25"],            # ~yellow (30-60d)
+        ["",             "reconciliation",
+         "Resolve orphan quality record for unknown site 'tucson-line'",
+         "Data Steward", "2026-06-18", "in_progress", "", "2026-04-30"],    # ~yellow, no canonical site
+        ["huntsville",   "quality",
+         "Huntsville recurring equipment failures — root-cause the scrap-rate trend",
+         "Quality Director", "2026-07-15", "open", "", "2026-05-20"],       # ~green (<30d)
+    ]
+    return _write("actions.csv",
+                  ["site_id", "source", "title", "owner", "due_date", "status",
+                   "resolution_note", "created_at"], rows)
+
+
 def main():
     paths = [
         seed_sites(), seed_leases(), seed_hris(),
-        seed_mrp(), seed_quality(), seed_acquired(),
+        seed_mrp(), seed_quality(), seed_acquired(), seed_actions(),
     ]
     print("Seeded source-system exports:")
     for p in paths:
