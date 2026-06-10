@@ -9,9 +9,9 @@ def _by_id(conn):
 def test_phoenix_is_at_risk_with_a_60_day_window(built_db):
     conn, _ = built_db
     phx = _by_id(conn)["phoenix-line"]
-    # option deadline 2025-11-02, binding (power) breach 2026-Q1 -> 2026-01-01
-    assert phx["binding_breach_quarter"] == "2026-Q1"
-    assert phx["breach_date"] == "2026-01-01"
+    # option deadline 2026-08-02, binding (power) breach 2026-Q4 -> 2026-10-01
+    assert phx["binding_breach_quarter"] == "2026-Q4"
+    assert phx["breach_date"] == "2026-10-01"
     assert phx["decision_window_days"] == 60       # 60 days of runway
     assert phx["cliff_status"] == "AT RISK"         # < 180 days
 

@@ -28,7 +28,7 @@ def test_cost_per_sqft_null_safe_for_buildout(built_db):
 def test_seats_flags_over_and_under_capacity(built_db):
     conn, _ = built_db
     q4 = {r["site_id"]: r for r in
-          db.query(conn, "SELECT * FROM vw_headcount_vs_seats WHERE quarter='2025-Q4'")}
+          db.query(conn, "SELECT * FROM vw_headcount_vs_seats WHERE quarter='2026-Q3'")}
     assert q4["costa-mesa"]["capacity_flag"] == "over capacity"     # ramp blew past seats
     assert q4["boston-rd"]["capacity_flag"] == "under-utilized"     # empty seats
 

@@ -1,27 +1,27 @@
 site_id,site_name,quarter,available_sqft,demanded_sqft,floor_utilization_pct,available_kw,demanded_kw,power_utilization_pct
-atlanta-campus,Atlanta Innovation Campus,2025-Q3,,40000.0,,,3000.0,
-atlanta-campus,Atlanta Innovation Campus,2025-Q4,,80000.0,,,6000.0,
-austin-fab,Austin Fabrication,2025-Q1,800000,300000.0,37.5,20000,7500.0,37.5
-austin-fab,Austin Fabrication,2025-Q2,800000,300000.0,37.5,20000,7500.0,37.5
-austin-fab,Austin Fabrication,2025-Q3,800000,300000.0,37.5,20000,7500.0,37.5
+atlanta-campus,Atlanta Innovation Campus,2026-Q2,,40000.0,,,3000.0,
+atlanta-campus,Atlanta Innovation Campus,2026-Q3,,80000.0,,,6000.0,
 austin-fab,Austin Fabrication,2025-Q4,800000,300000.0,37.5,20000,7500.0,37.5
-boston-rd,Boston R&D Lab,2025-Q1,60000,10000.0,16.7,1500,500.0,33.3
-boston-rd,Boston R&D Lab,2025-Q2,60000,10000.0,16.7,1500,500.0,33.3
-boston-rd,Boston R&D Lab,2025-Q3,60000,10000.0,16.7,1500,500.0,33.3
+austin-fab,Austin Fabrication,2026-Q1,800000,300000.0,37.5,20000,7500.0,37.5
+austin-fab,Austin Fabrication,2026-Q2,800000,300000.0,37.5,20000,7500.0,37.5
+austin-fab,Austin Fabrication,2026-Q3,800000,300000.0,37.5,20000,7500.0,37.5
 boston-rd,Boston R&D Lab,2025-Q4,60000,10000.0,16.7,1500,500.0,33.3
-costa-mesa,Costa Mesa HQ & Flagship Factory,2025-Q1,5000000,1200000.0,24.0,60000,12000.0,20.0
-costa-mesa,Costa Mesa HQ & Flagship Factory,2025-Q2,5000000,1200000.0,24.0,60000,12000.0,20.0
-costa-mesa,Costa Mesa HQ & Flagship Factory,2025-Q3,5000000,1200000.0,24.0,60000,12000.0,20.0
+boston-rd,Boston R&D Lab,2026-Q1,60000,10000.0,16.7,1500,500.0,33.3
+boston-rd,Boston R&D Lab,2026-Q2,60000,10000.0,16.7,1500,500.0,33.3
+boston-rd,Boston R&D Lab,2026-Q3,60000,10000.0,16.7,1500,500.0,33.3
 costa-mesa,Costa Mesa HQ & Flagship Factory,2025-Q4,5000000,1200000.0,24.0,60000,12000.0,20.0
-huntsville,Huntsville Integration,2025-Q1,600000,150000.0,25.0,15000,6000.0,40.0
-huntsville,Huntsville Integration,2025-Q2,600000,150000.0,25.0,15000,6000.0,40.0
-huntsville,Huntsville Integration,2025-Q3,600000,150000.0,25.0,15000,6000.0,40.0
+costa-mesa,Costa Mesa HQ & Flagship Factory,2026-Q1,5000000,1200000.0,24.0,60000,12000.0,20.0
+costa-mesa,Costa Mesa HQ & Flagship Factory,2026-Q2,5000000,1200000.0,24.0,60000,12000.0,20.0
+costa-mesa,Costa Mesa HQ & Flagship Factory,2026-Q3,5000000,1200000.0,24.0,60000,12000.0,20.0
 huntsville,Huntsville Integration,2025-Q4,600000,150000.0,25.0,15000,6000.0,40.0
-phoenix-line,Phoenix Production Line,2025-Q1,200000,120000.0,60.0,4800,3120.0,65.0
-phoenix-line,Phoenix Production Line,2025-Q2,200000,130000.0,65.0,4800,3380.0,70.4
-phoenix-line,Phoenix Production Line,2025-Q3,200000,140000.0,70.0,4800,3640.0,75.8
-phoenix-line,Phoenix Production Line,2025-Q4,200000,150000.0,75.0,4800,3900.0,81.3
-seattle-ops,Seattle Logistics & Warehouse,2025-Q1,1200000,100000.0,8.3,8000,2000.0,25.0
-seattle-ops,Seattle Logistics & Warehouse,2025-Q2,1200000,100000.0,8.3,8000,2000.0,25.0
-seattle-ops,Seattle Logistics & Warehouse,2025-Q3,1200000,100000.0,8.3,8000,2000.0,25.0
+huntsville,Huntsville Integration,2026-Q1,600000,150000.0,25.0,15000,6000.0,40.0
+huntsville,Huntsville Integration,2026-Q2,600000,150000.0,25.0,15000,6000.0,40.0
+huntsville,Huntsville Integration,2026-Q3,600000,150000.0,25.0,15000,6000.0,40.0
+phoenix-line,Phoenix Production Line,2025-Q4,200000,120000.0,60.0,4800,3120.0,65.0
+phoenix-line,Phoenix Production Line,2026-Q1,200000,130000.0,65.0,4800,3380.0,70.4
+phoenix-line,Phoenix Production Line,2026-Q2,200000,140000.0,70.0,4800,3640.0,75.8
+phoenix-line,Phoenix Production Line,2026-Q3,200000,150000.0,75.0,4800,3900.0,81.3
 seattle-ops,Seattle Logistics & Warehouse,2025-Q4,1200000,100000.0,8.3,8000,2000.0,25.0
+seattle-ops,Seattle Logistics & Warehouse,2026-Q1,1200000,100000.0,8.3,8000,2000.0,25.0
+seattle-ops,Seattle Logistics & Warehouse,2026-Q2,1200000,100000.0,8.3,8000,2000.0,25.0
+seattle-ops,Seattle Logistics & Warehouse,2026-Q3,1200000,100000.0,8.3,8000,2000.0,25.0

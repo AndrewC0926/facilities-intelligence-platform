@@ -13,8 +13,8 @@ def test_site_code_canonicalization():
 def test_money_and_quarter_parsing():
     assert etl.parse_money("$1,200,000") == 1200000.0
     assert etl.parse_money("") is None
-    assert etl.to_quarter("03/2025") == "2025-Q1"
-    assert etl.to_quarter("2025-Q4") == "2025-Q4"
+    assert etl.to_quarter("12/2025") == "2025-Q4"   # the boston-rd MM/YYYY drift value
+    assert etl.to_quarter("2026-Q3") == "2026-Q3"
 
 
 def test_acquired_site_reconciled_to_single_canonical_row(built_db):
@@ -30,7 +30,7 @@ def test_headcount_dedupe_keeps_resolved_value(built_db):
     conn, report = built_db
     rows = db.query(conn,
         "SELECT headcount FROM headcount_snapshots "
-        "WHERE site_id='costa-mesa' AND quarter='2025-Q2' AND program='Anvil'")
+        "WHERE site_id='costa-mesa' AND quarter='2026-Q1' AND program='Anvil'")
     assert len(rows) == 1 and rows[0]["headcount"] == 5800   # not the 9999 dupe
     assert any("9999" in d for d in report["dedupes"])
 

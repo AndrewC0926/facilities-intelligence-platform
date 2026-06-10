@@ -1,17 +1,17 @@
 site_id,quarter,category,severity,status,reported_date,description
-huntsville,2025-Q1,equipment,5,open,2025-02-11,CNC spindle failure halting line 3
-huntsville,2025-Q1,safety,4,closed,2025-03-02,Forklift near-miss in receiving
-huntsville,2025-Q2,facility,4,open,2025-05-19,Roof leak over clean assembly bay
-huntsville,2025-Q2,equipment,5,open,2025-06-04,Test chamber HVAC out of spec
-huntsville,2025-Q3,supply,3,closed,2025-08-21,Solder paste lot rejected at incoming QA
-huntsville,2025-Q3,safety,4,open,2025-09-09,Repeated eyewash station pressure fault
-huntsville,2025-Q4,equipment,5,open,2025-11-13,"Robotic arm calibration drift, scrap rate up"
-huntsville,2025-Q4,facility,3,closed,2025-12-01,Loading dock door off track
-costa-mesa,2025-Q3,facility,2,closed,2025-08-04,"HVAC zone imbalance, west wing"
-costa-mesa,2025-Q4,equipment,3,open,2025-10-22,Conveyor sensor intermittent
-austin-fab,2025-Q2,supply,2,closed,2025-04-30,Anodize bath chemistry off
-phoenix-line,2025-Q4,facility,3,open,2025-11-28,Insufficient floor space staging WIP
-seattle-ops,2025-Q3,safety,2,closed,2025-07-15,Racking inspection finding
-boston-rd,2025-Q2,equipment,1,closed,2025-05-06,Fume hood airflow low
-QNTC,2025-Q4,facility,4,open,2025-12-09,Generator transfer switch unreliable (inherited)
-tucson-line,2025-Q3,equipment,3,open,2025-09-30,Press brake overdue for PM (unknown site)
+huntsville,2025-Q4,equipment,5,open,2025-11-11,CNC spindle failure halting line 3
+huntsville,2025-Q4,safety,4,closed,2025-12-02,Forklift near-miss in receiving
+huntsville,2026-Q1,facility,4,open,2026-02-19,Roof leak over clean assembly bay
+huntsville,2026-Q1,equipment,5,open,2026-03-04,Test chamber HVAC out of spec
+huntsville,2026-Q2,supply,3,closed,2026-05-21,Solder paste lot rejected at incoming QA
+huntsville,2026-Q2,safety,4,open,2026-06-09,Repeated eyewash station pressure fault
+huntsville,2026-Q3,equipment,5,open,2026-08-13,"Robotic arm calibration drift, scrap rate up"
+huntsville,2026-Q3,facility,3,closed,2026-09-01,Loading dock door off track
+costa-mesa,2026-Q2,facility,2,closed,2026-05-04,"HVAC zone imbalance, west wing"
+costa-mesa,2026-Q3,equipment,3,open,2026-07-22,Conveyor sensor intermittent
+austin-fab,2026-Q1,supply,2,closed,2026-01-30,Anodize bath chemistry off
+phoenix-line,2026-Q3,facility,3,open,2026-08-28,Insufficient floor space staging WIP
+seattle-ops,2026-Q2,safety,2,closed,2026-04-15,Racking inspection finding
+boston-rd,2026-Q1,equipment,1,closed,2026-02-06,Fume hood airflow low
+QNTC,2026-Q3,facility,4,open,2026-09-09,Generator transfer switch unreliable (inherited)
+tucson-line,2026-Q2,equipment,3,open,2026-06-30,Press brake overdue for PM (unknown site)

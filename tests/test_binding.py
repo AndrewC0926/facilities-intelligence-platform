@@ -13,12 +13,12 @@ def test_phoenix_binds_on_power_before_floor(built_db):
     phx = _by_id(conn)["phoenix-line"]
     # floor story is intact and unchanged
     assert phx["quarters_to_wall"] == 2
-    assert phx["projected_breach_quarter"] == "2026-Q2"
+    assert phx["projected_breach_quarter"] == "2027-Q1"
     # power hits the wall one quarter sooner -> power is the binding constraint
     assert phx["power_quarters_to_wall"] == 1
-    assert phx["power_breach_quarter"] == "2026-Q1"
+    assert phx["power_breach_quarter"] == "2026-Q4"
     assert phx["binding_constraint"] == "power"
-    assert phx["binding_breach_quarter"] == "2026-Q1"
+    assert phx["binding_breach_quarter"] == "2026-Q4"
     assert phx["binding_status"] == "COLLISION WARNING"
 
 
@@ -40,11 +40,11 @@ def test_reconciliation_status_view_reports_two_exceptions(built_db):
 
 
 def test_project_is_pure_and_matches_the_phoenix_numbers():
-    # power: 4,800 kW ceiling, 3,900 kW demand, +260 kW/quarter, last quarter 2025-Q4
-    last_q = 2025 * 4 + 4 - 1
+    # power: 4,800 kW ceiling, 3,900 kW demand, +260 kW/quarter, last quarter 2026-Q3
+    last_q = 2026 * 4 + 3 - 1
     p = scenario.project(4800, 3900, 260, last_q)
     assert p["quarters_to_wall"] == 1
-    assert p["breach_quarter"] == "2026-Q1"
+    assert p["breach_quarter"] == "2026-Q4"
     assert p["status"] == "COLLISION WARNING"
     # flat growth -> no collision; unknown capacity -> pending
     assert scenario.project(4800, 3900, 0, last_q)["quarters_to_wall"] is None

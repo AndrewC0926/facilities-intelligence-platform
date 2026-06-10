@@ -28,7 +28,7 @@ def test_brief_headline_names_the_binding_constraint(built_db):
     md = brief.render(conn=conn, today=datetime.date(2026, 6, 10))
     assert "Phoenix Production Line" in md
     assert "POWER" in md
-    assert "2026-Q1" in md          # the dated binding breach, not the floor 2026-Q2
+    assert "2026-Q4" in md          # the dated binding breach, not the floor 2027-Q1
 
 
 def test_brief_reports_two_reconciliation_exceptions(built_db):

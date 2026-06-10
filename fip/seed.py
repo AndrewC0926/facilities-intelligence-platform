@@ -21,7 +21,11 @@ import csv
 import os
 
 SEED_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "seeds")
-QUARTERS = ["2025-Q1", "2025-Q2", "2025-Q3", "2025-Q4"]
+# The observation window is the four planned quarters the MRP/HRIS feeds cover.
+# It is anchored so the projected capacity breaches land in the FUTURE relative to
+# a mid-2026 "today": Phoenix hits its POWER wall in 2026-Q4 and its FLOOR wall one
+# quarter later in 2027-Q1.
+QUARTERS = ["2025-Q4", "2026-Q1", "2026-Q2", "2026-Q3"]
 
 
 def _write(name, header, rows):
@@ -47,7 +51,7 @@ def seed_sites():
         ["huntsville",     "Huntsville Integration",           "Southeast", 600000,  2500,  15000, "factory",   "operational", "2029-09-01", "2029-03-01", "canonical"],
         ["boston-rd",      "Boston R&D Lab",                   "Northeast", 60000,   400,   1500,  "office",    "operational", "2027-01-01", "2026-07-01", "canonical"],
         ["seattle-ops",    "Seattle Logistics & Warehouse",    "West",      1200000, 500,   8000,  "warehouse", "operational", "2031-05-01", "2030-11-01", "canonical"],
-        ["phoenix-line",   "Phoenix Production Line",          "West",      200000,  1200,  4800,  "factory",   "operational", "2028-02-01", "2025-11-02", "canonical"],  # option deadline 60d before 2026-Q1 power breach
+        ["phoenix-line",   "Phoenix Production Line",          "West",      200000,  1200,  4800,  "factory",   "operational", "2028-02-01", "2026-08-02", "canonical"],  # option deadline 60d before 2026-Q4 power breach
     ]
     return _write("sites_master.csv",
                   ["site_id", "site_name", "region", "sq_ft", "seat_capacity", "power_kw_capacity", "site_type", "status",
@@ -74,20 +78,21 @@ def seed_leases():
 
 
 # -- hris_export.csv : headcount per site/program/quarter.
-#    Dirt: costa-mesa Q2 Anvil appears twice with conflicting totals (dedupe test);
-#    boston-rd Q1 uses MM/YYYY date drift ('03/2025'); one quantico row uses a bad code.
+#    Dirt: costa-mesa 2nd-quarter Anvil appears twice with conflicting totals (dedupe
+#    test); boston-rd first quarter uses MM/YYYY date drift ('12/2025'); one quantico
+#    row uses a bad code.
 def seed_hris():
     rows = []
-    ramp = {  # costa-mesa ramps past its 12,000 seats by Q4
+    ramp = {  # costa-mesa ramps past its 12,000 seats by the last quarter
         "Anvil":    [5000, 5800, 6600, 7600],
         "Sentinel": [4000, 4400, 5000, 5800],
     }
     for prog, vals in ramp.items():
         for q, hc in zip(QUARTERS, vals):
             rows.append(["costa-mesa", q, prog, hc])
-    # the deliberate duplicate: conflicting Q2 Anvil number, correct value comes later in file
-    rows.append(["costa-mesa", "2025-Q2", "Anvil", 9999])   # bad dupe (will be superseded)
-    rows.append(["costa-mesa", "2025-Q2", "Anvil", 5800])   # canonical value, kept
+    # the deliberate duplicate: conflicting 2026-Q1 Anvil number, correct value later
+    rows.append(["costa-mesa", "2026-Q1", "Anvil", 9999])   # bad dupe (will be superseded)
+    rows.append(["costa-mesa", "2026-Q1", "Anvil", 5800])   # canonical value, kept
 
     steady = {
         "austin-fab":   ("Forge",      [2400, 2420, 2450, 2480]),
@@ -98,14 +103,15 @@ def seed_hris():
     }
     for site, (prog, vals) in steady.items():
         for q, hc in zip(QUARTERS, vals):
-            # boston-rd Q1 arrives with a MM/YYYY date instead of a quarter label
-            qlabel = "03/2025" if (site == "boston-rd" and q == "2025-Q1") else q
+            # boston-rd's first quarter arrives as a MM/YYYY date instead of a quarter
+            # label ('12/2025' -> 2025-Q4), exercising the ETL's date normalization
+            qlabel = "12/2025" if (site == "boston-rd" and q == "2025-Q4") else q
             rows.append([site, qlabel, prog, hc])
     # atlanta campus just beginning to staff up (partial data)
-    rows.append(["atlanta-campus", "2025-Q3", "Sentinel", 50])
-    rows.append(["atlanta-campus", "2025-Q4", "Sentinel", 200])
+    rows.append(["atlanta-campus", "2026-Q2", "Sentinel", 50])
+    rows.append(["atlanta-campus", "2026-Q3", "Sentinel", 200])
     # acquired site headcount arrives with a messy code
-    rows.append(["Quantico Acq.", "2025-Q4", "Recon", 850])
+    rows.append(["Quantico Acq.", "2026-Q3", "Recon", 850])
     return _write("hris_export.csv", ["site_id", "quarter", "program", "headcount"], rows)
 
 
@@ -115,9 +121,9 @@ def seed_hris():
 def seed_mrp():
     rows = []
     # phoenix FLOOR: 500 sqft/unit, units 240->300 => demanded 120k->150k vs 200k sq ft.
-    #   85% wall = 170k; growth = 10k/q => floor breach ~2 quarters out => 2026-Q2.
+    #   85% wall = 170k; growth = 10k/q => floor breach ~2 quarters out => 2027-Q1.
     # phoenix POWER: 13 kW/unit, units 240->300 => demanded 3,120->3,900 kW vs 4,800 kW.
-    #   85% wall = 4,080 kW; growth = 260 kW/q => power breach ~1 quarter out => 2026-Q1.
+    #   85% wall = 4,080 kW; growth = 260 kW/q => power breach ~1 quarter out => 2026-Q4.
     #   => POWER is the binding constraint, hitting the wall before floor space.
     for q, units in zip(QUARTERS, [240, 260, 280, 300]):
         rows.append(["phoenix-line", q, "Anvil", units, 500, 13])
@@ -134,7 +140,7 @@ def seed_mrp():
             rows.append([site, q, prog, units, spu, kw])
     # atlanta campus has demand but its sq_ft AND power capacity are unknown
     # (mid-buildout) -> 'capacity data pending' on both constraints
-    for q, units in zip(["2025-Q3", "2025-Q4"], [100, 200]):
+    for q, units in zip(["2026-Q2", "2026-Q3"], [100, 200]):
         rows.append(["atlanta-campus", q, "Sentinel", units, 400, 30])
     return _write("mrp_export.csv",
                   ["site_id", "quarter", "program", "units_planned", "sqft_per_unit", "kw_per_unit"], rows)
@@ -150,27 +156,27 @@ def seed_quality():
         rows.append([site, q, cat, sev, status, date, desc])
 
     # huntsville — many issues, high severity, several still open
-    add("huntsville", "2025-Q1", "equipment", 5, "open",   "2025-02-11", "CNC spindle failure halting line 3")
-    add("huntsville", "2025-Q1", "safety",    4, "closed", "2025-03-02", "Forklift near-miss in receiving")
-    add("huntsville", "2025-Q2", "facility",  4, "open",   "2025-05-19", "Roof leak over clean assembly bay")
-    add("huntsville", "2025-Q2", "equipment", 5, "open",   "2025-06-04", "Test chamber HVAC out of spec")
-    add("huntsville", "2025-Q3", "supply",    3, "closed", "2025-08-21", "Solder paste lot rejected at incoming QA")
-    add("huntsville", "2025-Q3", "safety",    4, "open",   "2025-09-09", "Repeated eyewash station pressure fault")
-    add("huntsville", "2025-Q4", "equipment", 5, "open",   "2025-11-13", "Robotic arm calibration drift, scrap rate up")
-    add("huntsville", "2025-Q4", "facility",  3, "closed", "2025-12-01", "Loading dock door off track")
+    add("huntsville", "2025-Q4", "equipment", 5, "open",   "2025-11-11", "CNC spindle failure halting line 3")
+    add("huntsville", "2025-Q4", "safety",    4, "closed", "2025-12-02", "Forklift near-miss in receiving")
+    add("huntsville", "2026-Q1", "facility",  4, "open",   "2026-02-19", "Roof leak over clean assembly bay")
+    add("huntsville", "2026-Q1", "equipment", 5, "open",   "2026-03-04", "Test chamber HVAC out of spec")
+    add("huntsville", "2026-Q2", "supply",    3, "closed", "2026-05-21", "Solder paste lot rejected at incoming QA")
+    add("huntsville", "2026-Q2", "safety",    4, "open",   "2026-06-09", "Repeated eyewash station pressure fault")
+    add("huntsville", "2026-Q3", "equipment", 5, "open",   "2026-08-13", "Robotic arm calibration drift, scrap rate up")
+    add("huntsville", "2026-Q3", "facility",  3, "closed", "2026-09-01", "Loading dock door off track")
 
     # the rest — lighter load, mostly closed
-    add("costa-mesa",   "2025-Q3", "facility",  2, "closed", "2025-08-04", "HVAC zone imbalance, west wing")
-    add("costa-mesa",   "2025-Q4", "equipment", 3, "open",   "2025-10-22", "Conveyor sensor intermittent")
-    add("austin-fab",   "2025-Q2", "supply",    2, "closed", "2025-04-30", "Anodize bath chemistry off")
-    add("phoenix-line", "2025-Q4", "facility",  3, "open",   "2025-11-28", "Insufficient floor space staging WIP")  # foreshadows collision
-    add("seattle-ops",  "2025-Q3", "safety",    2, "closed", "2025-07-15", "Racking inspection finding")
-    add("boston-rd",    "2025-Q2", "equipment", 1, "closed", "2025-05-06", "Fume hood airflow low")
+    add("costa-mesa",   "2026-Q2", "facility",  2, "closed", "2026-05-04", "HVAC zone imbalance, west wing")
+    add("costa-mesa",   "2026-Q3", "equipment", 3, "open",   "2026-07-22", "Conveyor sensor intermittent")
+    add("austin-fab",   "2026-Q1", "supply",    2, "closed", "2026-01-30", "Anodize bath chemistry off")
+    add("phoenix-line", "2026-Q3", "facility",  3, "open",   "2026-08-28", "Insufficient floor space staging WIP")  # foreshadows collision
+    add("seattle-ops",  "2026-Q2", "safety",    2, "closed", "2026-04-15", "Racking inspection finding")
+    add("boston-rd",    "2026-Q1", "equipment", 1, "closed", "2026-02-06", "Fume hood airflow low")
 
     # acquired site, messy code
-    add("QNTC", "2025-Q4", "facility", 4, "open", "2025-12-09", "Generator transfer switch unreliable (inherited)")
+    add("QNTC", "2026-Q3", "facility", 4, "open", "2026-09-09", "Generator transfer switch unreliable (inherited)")
     # ORPHAN: site that exists in no registry -> ETL must quarantine, not crash
-    add("tucson-line", "2025-Q3", "equipment", 3, "open", "2025-09-30", "Press brake overdue for PM (unknown site)")
+    add("tucson-line", "2026-Q2", "equipment", 3, "open", "2026-06-30", "Press brake overdue for PM (unknown site)")
 
     return _write("erp_quality.csv",
                   ["site_id", "quarter", "category", "severity", "status", "reported_date", "description"], rows)
@@ -201,7 +207,7 @@ def seed_actions():
     rows = [
         # site_id, source, title, owner, due_date, status, resolution_note, created_at
         ["phoenix-line", "collision",
-         "Phoenix POWER breach 2026-Q1 — decide: electrical upgrade vs. shift Anvil line",
+         "Phoenix POWER breach 2026-Q4 — decide: electrical upgrade vs. shift Anvil line",
          "VP Facilities", "2026-06-30", "open", "", "2026-03-15"],          # ~red (>60d)
         ["quantico-acq", "reconciliation",
          "Sign off quantico-acq lease: USD $1.2M (kept) vs CAD $1.5M row",

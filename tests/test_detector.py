@@ -8,7 +8,7 @@ def test_phoenix_line_is_flagged_with_a_dated_two_quarter_warning(built_db):
     phx = rows["phoenix-line"]
     assert phx["collision_status"] == "COLLISION WARNING"
     assert phx["quarters_to_wall"] == 2                 # ~2 quarters out
-    assert phx["projected_breach_quarter"] == "2026-Q2" # dated, not just "soon"
+    assert phx["projected_breach_quarter"] == "2027-Q1" # dated, not just "soon"
     assert phx["projected_util_2q_pct"] >= 85.0
 
 
