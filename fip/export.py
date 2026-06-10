@@ -19,6 +19,7 @@ PUBLISHED_VIEWS = [
     "vw_headcount_vs_seats",
     "vw_capacity_vs_demand",
     "vw_capacity_collision",
+    "vw_reconciliation_status",
 ]
 
 

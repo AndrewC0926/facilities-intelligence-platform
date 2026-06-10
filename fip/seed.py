@@ -37,17 +37,17 @@ def _write(name, header, rows):
 # -- sites_master.csv : the 7 clean canonical sites (quantico arrives dirty, separately)
 def seed_sites():
     rows = [
-        # site_id, site_name, region, sq_ft, seat_capacity, site_type, status, source_system
-        ["costa-mesa",     "Costa Mesa HQ & Flagship Factory", "West",      5000000, 12000, "factory",   "operational", "canonical"],
-        ["atlanta-campus", "Atlanta Innovation Campus",        "Southeast", "",      "",    "campus",    "buildout",    "canonical"],
-        ["austin-fab",     "Austin Fabrication",               "Central",   800000,  3000,  "factory",   "operational", "canonical"],
-        ["huntsville",     "Huntsville Integration",           "Southeast", 600000,  2500,  "factory",   "operational", "canonical"],
-        ["boston-rd",      "Boston R&D Lab",                   "Northeast", 60000,   400,   "office",    "operational", "canonical"],
-        ["seattle-ops",    "Seattle Logistics & Warehouse",    "West",      1200000, 500,   "warehouse", "operational", "canonical"],
-        ["phoenix-line",   "Phoenix Production Line",          "West",      200000,  1200,  "factory",   "operational", "canonical"],
+        # site_id, site_name, region, sq_ft, seat_capacity, power_kw_capacity, site_type, status, source_system
+        ["costa-mesa",     "Costa Mesa HQ & Flagship Factory", "West",      5000000, 12000, 60000, "factory",   "operational", "canonical"],
+        ["atlanta-campus", "Atlanta Innovation Campus",        "Southeast", "",      "",    "",    "campus",    "buildout",    "canonical"],
+        ["austin-fab",     "Austin Fabrication",               "Central",   800000,  3000,  20000, "factory",   "operational", "canonical"],
+        ["huntsville",     "Huntsville Integration",           "Southeast", 600000,  2500,  15000, "factory",   "operational", "canonical"],
+        ["boston-rd",      "Boston R&D Lab",                   "Northeast", 60000,   400,   1500,  "office",    "operational", "canonical"],
+        ["seattle-ops",    "Seattle Logistics & Warehouse",    "West",      1200000, 500,   8000,  "warehouse", "operational", "canonical"],
+        ["phoenix-line",   "Phoenix Production Line",          "West",      200000,  1200,  4800,  "factory",   "operational", "canonical"],
     ]
     return _write("sites_master.csv",
-                  ["site_id", "site_name", "region", "sq_ft", "seat_capacity", "site_type", "status", "source_system"],
+                  ["site_id", "site_name", "region", "sq_ft", "seat_capacity", "power_kw_capacity", "site_type", "status", "source_system"],
                   rows)
 
 
@@ -105,29 +105,35 @@ def seed_hris():
     return _write("hris_export.csv", ["site_id", "quarter", "program", "headcount"], rows)
 
 
-# -- mrp_export.csv : production demand. phoenix-line is engineered to ramp into the wall.
+# -- mrp_export.csv : production demand on TWO constraints — floor space and power.
+#    phoenix-line is engineered to ramp into the wall, and to hit its POWER ceiling
+#    one quarter BEFORE its floor ceiling (the binding constraint is power).
 def seed_mrp():
     rows = []
-    # phoenix: 500 sqft/unit, units 240->300 => demanded 120k->150k against 200k sq ft.
-    # 85% wall = 170k; growth = 10k/q => breach ~2 quarters after 2025-Q4 => 2026-Q2.
+    # phoenix FLOOR: 500 sqft/unit, units 240->300 => demanded 120k->150k vs 200k sq ft.
+    #   85% wall = 170k; growth = 10k/q => floor breach ~2 quarters out => 2026-Q2.
+    # phoenix POWER: 13 kW/unit, units 240->300 => demanded 3,120->3,900 kW vs 4,800 kW.
+    #   85% wall = 4,080 kW; growth = 260 kW/q => power breach ~1 quarter out => 2026-Q1.
+    #   => POWER is the binding constraint, hitting the wall before floor space.
     for q, units in zip(QUARTERS, [240, 260, 280, 300]):
-        rows.append(["phoenix-line", q, "Anvil", units, 500])
-    # everyone else: comfortably within their building, flat (no collision)
+        rows.append(["phoenix-line", q, "Anvil", units, 500, 13])
+    # everyone else: comfortably within both ceilings, flat (no collision on either)
     flat = {
-        "costa-mesa":  ("Anvil",     1200, 1000),   # 1.2M of 5M
-        "austin-fab":  ("Forge",     1500, 200),    # 300k of 800k
-        "huntsville":  ("Sentinel",  1000, 150),    # 150k of 600k
-        "seattle-ops": ("Logistics", 2000, 50),     # 100k of 1.2M
-        "boston-rd":   ("Lab",       100,  100),     # 10k of 60k
+        "costa-mesa":  ("Anvil",     1200, 1000, 10),   # 1.2M sqft / 12,000 kW
+        "austin-fab":  ("Forge",     1500, 200,  5),    # 300k sqft / 7,500 kW
+        "huntsville":  ("Sentinel",  1000, 150,  6),    # 150k sqft / 6,000 kW
+        "seattle-ops": ("Logistics", 2000, 50,   1),    # 100k sqft / 2,000 kW
+        "boston-rd":   ("Lab",       100,  100,  5),     # 10k sqft / 500 kW
     }
-    for site, (prog, units, spu) in flat.items():
+    for site, (prog, units, spu, kw) in flat.items():
         for q in QUARTERS:
-            rows.append([site, q, prog, units, spu])
-    # atlanta campus has demand but its sq_ft is unknown -> 'capacity data pending'
+            rows.append([site, q, prog, units, spu, kw])
+    # atlanta campus has demand but its sq_ft AND power capacity are unknown
+    # (mid-buildout) -> 'capacity data pending' on both constraints
     for q, units in zip(["2025-Q3", "2025-Q4"], [100, 200]):
-        rows.append(["atlanta-campus", q, "Sentinel", units, 400])
+        rows.append(["atlanta-campus", q, "Sentinel", units, 400, 30])
     return _write("mrp_export.csv",
-                  ["site_id", "quarter", "program", "units_planned", "sqft_per_unit"], rows)
+                  ["site_id", "quarter", "program", "units_planned", "sqft_per_unit", "kw_per_unit"], rows)
 
 
 # -- erp_quality.csv : quality/CMMS issues. huntsville is the hot site.
