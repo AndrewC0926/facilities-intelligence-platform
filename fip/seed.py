@@ -324,12 +324,14 @@ def seed_space_types():
 def seed_archetype_space_map():
     # ratio = units of a space type consumed per worker of an archetype. DATA, not
     # constants in a view. A missing pair means that archetype needs none of it.
+    # Benchmark: production parking 0.67 = the ~2-stalls-per-3-workers peak-shift rule;
+    # office/field archetypes sit below it. (SCIF lead 540d is within the 360-1080d range.)
     rows = [
         # archetype_id, space_type_id, ratio
-        [1, 3, 1.0],  [1, 4, 0.67],                 # production: 1 workstation, 0.67 parking, 0 desk
+        [1, 3, 1.0],  [1, 4, 0.67],                 # production: 1 workstation, 0.67 parking (~2:3 peak), 0 desk
         [2, 1, 1.0],  [2, 4, 0.5],  [2, 2, 0.25],   # engineer: 1 desk, 0.5 parking, 0.25 bench
         [3, 5, 1.0],  [3, 1, 0.2],  [3, 4, 0.5],    # cleared: 1 SCIF seat, 0.2 desk, 0.5 parking
-        [4, 1, 0.1],  [4, 4, 0.8],                  # field: 0.1 desk, 0.8 parking
+        [4, 1, 0.1],  [4, 4, 0.3],                  # field: 0.1 desk, 0.3 parking (mostly deployed -> low peak on-site)
         [5, 3, 0.5],  [5, 1, 0.5],  [5, 4, 0.5],    # contractor: 0.5 workstation, 0.5 desk, 0.5 parking
         [6, 1, 1.0],  [6, 4, 0.4],                  # corporate: 1 desk, 0.4 parking
     ]
