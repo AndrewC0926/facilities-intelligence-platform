@@ -898,3 +898,340 @@ FROM auth a
 JOIN sites s ON s.site_id = a.site_id
 LEFT JOIN pipe p    ON p.site_id = a.site_id
 LEFT JOIN binding b ON b.site_id = a.site_id;
+
+
+-- =============================================================================
+-- PHASE 4 — CROSS-FUNCTIONAL & KPI (accountability) LAYER
+-- =============================================================================
+-- The platform grades itself here: scores its own aged forecasts, prices the cost
+-- of waiting, holds sites to incentive and accreditation commitments, checks
+-- day-one readiness, and rolls it all into a KPI scorecard. Phase 1-3 views are
+-- untouched; these read on top of them. Config stays data; no site is named.
+
+
+-- -----------------------------------------------------------------------------
+-- vw_space_capacity_effective
+-- -----------------------------------------------------------------------------
+-- BUSINESS QUESTION : "Which 'planned' / 'audit_pending' capacities may we now count
+--                      on — i.e. which have actually cleared final accreditation?"
+-- WHO ASKS          : VP Facilities, Security/accreditation, capital planning.
+-- REFRESH CADENCE   : Weekly.
+-- RULE              : a 'planned' or 'audit_pending' capacity counts as effectively
+--                      'confirmed' ONLY once its final 'accreditation' milestone has an
+--                      actual_date. Everything else keeps its raw status. (The Phase 3
+--                      vw_space_collision still reads the raw table and is unchanged.)
+-- -----------------------------------------------------------------------------
+DROP VIEW IF EXISTS vw_space_capacity_effective;
+CREATE VIEW vw_space_capacity_effective AS
+SELECT
+    sc.site_id,
+    sc.space_type_id,
+    st.name                                         AS space_type,
+    sc.capacity,
+    sc.capacity_status                              AS raw_status,
+    CASE WHEN EXISTS (SELECT 1 FROM accreditation_milestones am
+                       WHERE am.site_id = sc.site_id AND am.space_type_id = sc.space_type_id
+                         AND am.milestone = 'accreditation' AND am.actual_date IS NOT NULL)
+         THEN 1 ELSE 0 END                          AS accreditation_complete,
+    CASE
+        WHEN sc.capacity_status IN ('planned', 'audit_pending')
+             AND EXISTS (SELECT 1 FROM accreditation_milestones am
+                          WHERE am.site_id = sc.site_id AND am.space_type_id = sc.space_type_id
+                            AND am.milestone = 'accreditation' AND am.actual_date IS NOT NULL)
+        THEN 'confirmed'
+        ELSE sc.capacity_status
+    END                                             AS effective_status
+FROM space_capacity sc
+JOIN space_types st ON st.space_type_id = sc.space_type_id;
+
+
+-- -----------------------------------------------------------------------------
+-- vw_accreditation_pipeline
+-- -----------------------------------------------------------------------------
+-- BUSINESS QUESTION : "For each space still being stood up, what stage is it in, how
+--                      far has it slipped, and is its capacity confirmable yet?"
+-- WHO ASKS          : Security/accreditation, VP Facilities, capital planning.
+-- REFRESH CADENCE   : Weekly.
+-- METHOD            : Order milestones design_approval -> construction -> inspection
+--                      -> accreditation. current_stage = furthest with an actual_date;
+--                      next_stage = earliest without one; max_slip_days = worst
+--                      actual-minus-planned across met milestones.
+-- -----------------------------------------------------------------------------
+DROP VIEW IF EXISTS vw_accreditation_pipeline;
+CREATE VIEW vw_accreditation_pipeline AS
+WITH m AS (
+    SELECT
+        site_id, space_type_id,
+        SUM(CASE WHEN actual_date IS NOT NULL THEN 1 ELSE 0 END)  AS milestones_met,
+        COUNT(*)                                                  AS milestones_total,
+        MAX(CASE WHEN actual_date IS NOT NULL
+                 THEN CAST(julianday(actual_date) - julianday(planned_date) AS INTEGER) END) AS max_slip_days,
+        MAX(CASE WHEN milestone = 'accreditation' AND actual_date IS NOT NULL THEN 1 ELSE 0 END) AS accreditation_complete
+    FROM accreditation_milestones
+    GROUP BY site_id, space_type_id
+)
+SELECT
+    m.site_id, s.site_name, m.space_type_id, st.name AS space_type,
+    m.milestones_met, m.milestones_total,
+    (SELECT am.milestone FROM accreditation_milestones am
+      WHERE am.site_id = m.site_id AND am.space_type_id = m.space_type_id AND am.actual_date IS NOT NULL
+      ORDER BY CASE am.milestone WHEN 'design_approval' THEN 1 WHEN 'construction' THEN 2
+                                 WHEN 'inspection' THEN 3 WHEN 'accreditation' THEN 4 ELSE 5 END DESC
+      LIMIT 1)                                                    AS current_stage,
+    (SELECT am.milestone FROM accreditation_milestones am
+      WHERE am.site_id = m.site_id AND am.space_type_id = m.space_type_id AND am.actual_date IS NULL
+      ORDER BY CASE am.milestone WHEN 'design_approval' THEN 1 WHEN 'construction' THEN 2
+                                 WHEN 'inspection' THEN 3 WHEN 'accreditation' THEN 4 ELSE 5 END ASC
+      LIMIT 1)                                                    AS next_stage,
+    COALESCE(m.max_slip_days, 0)                                  AS max_slip_days,
+    m.accreditation_complete,
+    CASE WHEN m.accreditation_complete = 1 THEN 'accredited — capacity confirmed'
+         ELSE 'in progress — capacity unconfirmed' END           AS pipeline_status
+FROM m
+JOIN sites s        ON s.site_id = m.site_id
+JOIN space_types st ON st.space_type_id = m.space_type_id;
+
+
+-- -----------------------------------------------------------------------------
+-- vw_forecast_accuracy   ★ the platform scores its own past forecasts ★
+-- -----------------------------------------------------------------------------
+-- BUSINESS QUESTION : "How good were our earlier breach forecasts? Forecast accuracy
+--                      should be computable, not claimed."
+-- WHO ASKS          : COO, VP Facilities (trust in the model).
+-- REFRESH CADENCE   : Per pipeline run (each run appends a fresh snapshot).
+-- METHOD            : Each aged snapshot is scored against the LATEST snapshot for the
+--                      same site+space (the closest-to-truth 'actual'). error_quarters =
+--                      |forecast breach - actual breach| in quarters; outcome = hit when
+--                      the quarters match. Only snapshots older than the actual are scored.
+-- -----------------------------------------------------------------------------
+DROP VIEW IF EXISTS vw_forecast_accuracy;
+CREATE VIEW vw_forecast_accuracy AS
+WITH actual AS (
+    SELECT fs.* FROM forecast_snapshots fs
+    WHERE fs.snapshot_date = (SELECT MAX(x.snapshot_date) FROM forecast_snapshots x
+                               WHERE x.site_id = fs.site_id AND x.space_type_id = fs.space_type_id)
+)
+SELECT
+    f.snapshot_id,
+    f.snapshot_date                                 AS forecast_date,
+    f.site_id, s.site_name,
+    f.space_type_id, st.name                        AS space_type,
+    f.predicted_breach_quarter                      AS forecast_breach_quarter,
+    a.predicted_breach_quarter                      AS actual_breach_quarter,
+    a.snapshot_date                                 AS actual_date,
+    CASE WHEN f.predicted_breach_quarter IS NULL OR a.predicted_breach_quarter IS NULL THEN NULL
+         ELSE ABS((CAST(substr(f.predicted_breach_quarter,1,4) AS INTEGER)*4 + CAST(substr(f.predicted_breach_quarter,7,1) AS INTEGER))
+                - (CAST(substr(a.predicted_breach_quarter,1,4) AS INTEGER)*4 + CAST(substr(a.predicted_breach_quarter,7,1) AS INTEGER)))
+    END                                             AS error_quarters,
+    ROUND(ABS(f.predicted_util_pct - a.predicted_util_pct), 1) AS util_error_pct,
+    CASE WHEN f.predicted_breach_quarter IS NULL OR a.predicted_breach_quarter IS NULL THEN NULL
+         WHEN f.predicted_breach_quarter = a.predicted_breach_quarter THEN 'hit'
+         ELSE 'miss' END                            AS outcome
+FROM forecast_snapshots f
+JOIN actual a       ON a.site_id = f.site_id AND a.space_type_id = f.space_type_id
+JOIN sites s        ON s.site_id = f.site_id
+JOIN space_types st ON st.space_type_id = f.space_type_id
+WHERE f.snapshot_date < a.snapshot_date;
+
+
+-- -----------------------------------------------------------------------------
+-- vw_cost_of_delay
+-- -----------------------------------------------------------------------------
+-- BUSINESS QUESTION : "For each projected breach with a remedy on file, what does it
+--                      cost to act NOW versus wait until the wall?"
+-- WHO ASKS          : CFO, COO, VP Facilities.
+-- REFRESH CADENCE   : Weekly.
+-- METHOD            : cost_now = est_remedy_cost_usd; cost_at_wall = remedy + delay cost
+--                      per quarter x quarters_to_wall; cost_of_delay = the difference.
+--                      Uses the site's binding capacity breach (vw_capacity_collision).
+-- -----------------------------------------------------------------------------
+DROP VIEW IF EXISTS vw_cost_of_delay;
+CREATE VIEW vw_cost_of_delay AS
+SELECT
+    a.action_id, a.site_id, s.site_name, a.title,
+    c.binding_constraint                            AS constraint_type,
+    c.binding_breach_quarter                        AS breach_quarter,
+    c.binding_quarters_to_wall                      AS quarters_to_wall,
+    ROUND(a.est_remedy_cost_usd, 0)                 AS cost_act_now_usd,
+    ROUND(a.est_remedy_cost_usd
+          + a.est_delay_cost_usd_per_quarter * c.binding_quarters_to_wall, 0) AS cost_act_at_wall_usd,
+    ROUND(a.est_delay_cost_usd_per_quarter * c.binding_quarters_to_wall, 0)   AS cost_of_delay_usd,
+    a.est_delay_cost_usd_per_quarter                AS delay_cost_per_quarter_usd
+FROM actions a
+JOIN sites s              ON s.site_id = a.site_id
+JOIN vw_capacity_collision c ON c.site_id = a.site_id
+WHERE a.est_remedy_cost_usd IS NOT NULL
+  AND c.binding_quarters_to_wall IS NOT NULL;
+
+
+-- -----------------------------------------------------------------------------
+-- vw_incentive_compliance
+-- -----------------------------------------------------------------------------
+-- BUSINESS QUESTION : "Are we on track to meet the job and capex commitments behind our
+--                      public incentives, and where is clawback money at risk?"
+-- WHO ASKS          : CFO, Corp Dev, Site GMs.
+-- REFRESH CADENCE   : Monthly.
+-- METHOD            : actual jobs = latest HRIS total; shortfalls vs committed jobs/capex;
+--                      days_to_measurement vs today. Reuses the lease-cliff window rule:
+--                      inside 180 days WITH a shortfall => AT RISK.
+-- -----------------------------------------------------------------------------
+DROP VIEW IF EXISTS vw_incentive_compliance;
+CREATE VIEW vw_incentive_compliance AS
+WITH actual_jobs AS (
+    SELECT site_id, SUM(headcount) AS jobs
+    FROM headcount_snapshots
+    WHERE quarter = (SELECT MAX(quarter) FROM headcount_snapshots h2 WHERE h2.site_id = headcount_snapshots.site_id)
+    GROUP BY site_id
+)
+SELECT
+    ia.agreement_id, ia.site_id, s.site_name, ia.authority,
+    ia.committed_jobs,
+    COALESCE(aj.jobs, 0)                             AS actual_jobs,
+    ia.committed_jobs - COALESCE(aj.jobs, 0)         AS jobs_shortfall,
+    ia.committed_capex_usd, ia.actual_capex_usd,
+    ia.committed_capex_usd - ia.actual_capex_usd     AS capex_shortfall_usd,
+    ia.measurement_date,
+    CAST(julianday(ia.measurement_date) - julianday('now') AS INTEGER) AS days_to_measurement,
+    ia.clawback_risk_usd,
+    CASE
+        WHEN (ia.committed_jobs - COALESCE(aj.jobs, 0)) <= 0
+             AND (ia.committed_capex_usd - ia.actual_capex_usd) <= 0 THEN 'met'
+        WHEN CAST(julianday(ia.measurement_date) - julianday('now') AS INTEGER) < 180
+             AND ((ia.committed_jobs - COALESCE(aj.jobs, 0)) > 0
+                  OR (ia.committed_capex_usd - ia.actual_capex_usd) > 0) THEN 'AT RISK'
+        ELSE 'on track'
+    END                                             AS compliance_status
+FROM incentive_agreements ia
+JOIN sites s ON s.site_id = ia.site_id
+LEFT JOIN actual_jobs aj ON aj.site_id = ia.site_id;
+
+
+-- -----------------------------------------------------------------------------
+-- vw_day_one_readiness
+-- -----------------------------------------------------------------------------
+-- BUSINESS QUESTION : "For cohorts starting within a quarter, is every day-one need
+--                      (seat, equipment, badge, parking) actually in place?"
+-- WHO ASKS          : VP Facilities, Onboarding/HR, Security.
+-- REFRESH CADENCE   : Weekly.
+-- METHOD            : "Now" = the latest HRIS quarter. Cohorts starting this quarter or
+--                      next are imminent; any missing readiness dimension flags them.
+--                      Also carries the portfolio pct of imminent cohorts fully ready.
+-- -----------------------------------------------------------------------------
+DROP VIEW IF EXISTS vw_day_one_readiness;
+CREATE VIEW vw_day_one_readiness AS
+WITH cur AS (
+    SELECT MAX(CAST(substr(quarter,1,4) AS INTEGER)*4 + CAST(substr(quarter,7,1) AS INTEGER) - 1) AS cq
+    FROM headcount_snapshots
+)
+SELECT
+    c.cohort_id, c.site_id, s.site_name, a.name AS archetype,
+    c.start_quarter, c.headcount,
+    c.seat_ready, c.equipment_ready, c.badge_ready, c.parking_ready,
+    (CAST(substr(c.start_quarter,1,4) AS INTEGER)*4 + CAST(substr(c.start_quarter,7,1) AS INTEGER) - 1)
+        - (SELECT cq FROM cur)                      AS quarters_to_start,
+    CASE WHEN (CAST(substr(c.start_quarter,1,4) AS INTEGER)*4 + CAST(substr(c.start_quarter,7,1) AS INTEGER) - 1)
+              - (SELECT cq FROM cur) BETWEEN 0 AND 1 THEN 1 ELSE 0 END AS is_imminent,
+    CASE WHEN (c.seat_ready AND c.equipment_ready AND c.badge_ready AND c.parking_ready) THEN 1 ELSE 0 END AS all_ready,
+    TRIM((CASE WHEN c.seat_ready = 0 THEN 'seat ' ELSE '' END)
+       || (CASE WHEN c.equipment_ready = 0 THEN 'equipment ' ELSE '' END)
+       || (CASE WHEN c.badge_ready = 0 THEN 'badge ' ELSE '' END)
+       || (CASE WHEN c.parking_ready = 0 THEN 'parking ' ELSE '' END))  AS not_ready_dimensions,
+    CASE WHEN (CAST(substr(c.start_quarter,1,4) AS INTEGER)*4 + CAST(substr(c.start_quarter,7,1) AS INTEGER) - 1)
+              - (SELECT cq FROM cur) BETWEEN 0 AND 1
+              AND NOT (c.seat_ready AND c.equipment_ready AND c.badge_ready AND c.parking_ready)
+         THEN 'NOT READY' ELSE 'ok' END             AS readiness_flag,
+    (SELECT ROUND(100.0 * SUM(CASE WHEN (oc.seat_ready AND oc.equipment_ready AND oc.badge_ready AND oc.parking_ready) THEN 1 ELSE 0 END)
+                  / COUNT(*), 1)
+       FROM onboarding_cohorts oc
+      WHERE (CAST(substr(oc.start_quarter,1,4) AS INTEGER)*4 + CAST(substr(oc.start_quarter,7,1) AS INTEGER) - 1)
+            - (SELECT cq FROM cur) BETWEEN 0 AND 1)  AS portfolio_pct_fully_ready
+FROM onboarding_cohorts c
+JOIN sites s      ON s.site_id = c.site_id
+JOIN archetypes a ON a.archetype_id = c.archetype_id;
+
+
+-- -----------------------------------------------------------------------------
+-- vw_kpi_scorecard   ★ the COO's one-screen accountability view ★
+-- -----------------------------------------------------------------------------
+-- BUSINESS QUESTION : "Against the KPIs a COO would actually set — facilities never the
+--                      bottleneck, forecasts graded, capital spent on time, space in its
+--                      corridor, people ready on day one — how are we doing?"
+-- WHO ASKS          : COO, CEO staff, VP Facilities.
+-- REFRESH CADENCE   : Weekly.
+-- METHOD            : One row per KPI, each rolled up from a Phase 3/4 view. Every value
+--                      is non-null (COALESCE'd) so the scorecard is always complete.
+-- -----------------------------------------------------------------------------
+DROP VIEW IF EXISTS vw_kpi_scorecard;
+CREATE VIEW vw_kpi_scorecard AS
+SELECT * FROM (
+    -- 1. worst-case time-to-seat vs time-to-fill by archetype
+    SELECT 1 AS sort_order, 'worst_case_seat_gap' AS kpi_key,
+        'Worst-case seat-vs-fill gap (facilities as bottleneck)' AS kpi_label,
+        COALESCE(MAX(CASE WHEN bottleneck_flag = 'facilities_bottleneck'
+                          THEN time_to_seat_days - time_to_fill_days END), 0) AS value,
+        'days' AS unit, 'target <= 0' AS target,
+        CASE WHEN COALESCE(MAX(CASE WHEN bottleneck_flag = 'facilities_bottleneck'
+                                    THEN time_to_seat_days - time_to_fill_days END), 0) > 0
+             THEN 'AT RISK' ELSE 'ok' END AS status,
+        COALESCE((SELECT archetype || ' @ ' || site_name || ' (' || binding_space_type || ')'
+                    FROM vw_time_to_seat WHERE bottleneck_flag = 'facilities_bottleneck'
+                    ORDER BY (time_to_seat_days - time_to_fill_days) DESC LIMIT 1), 'none') AS detail
+    FROM vw_time_to_seat
+
+    UNION ALL
+    -- 2. forecast accuracy (hit rate of aged forecasts)
+    SELECT 2, 'forecast_accuracy', 'Forecast accuracy (aged-forecast hit rate)',
+        COALESCE(ROUND(100.0 * SUM(CASE WHEN outcome = 'hit' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1), 0),
+        'pct', 'target >= 70%',
+        CASE WHEN COALESCE(100.0 * SUM(CASE WHEN outcome = 'hit' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 0) >= 70
+             THEN 'ok' ELSE 'watch' END,
+        COUNT(*) || ' aged forecast(s) scored'
+    FROM vw_forecast_accuracy WHERE outcome IS NOT NULL
+
+    UNION ALL
+    -- 3. pct of collision actions opened with lead time remaining
+    SELECT 3, 'actions_with_lead_time', 'Actions opened with lead time remaining',
+        COALESCE(ROUND(100.0 * SUM(CASE WHEN c.binding_quarters_to_wall >= 1 THEN 1 ELSE 0 END)
+                       / NULLIF(COUNT(*), 0), 1), 100.0),
+        'pct', 'target = 100%',
+        CASE WHEN COALESCE(100.0 * SUM(CASE WHEN c.binding_quarters_to_wall >= 1 THEN 1 ELSE 0 END)
+                           / NULLIF(COUNT(*), 0), 100) >= 100 THEN 'ok' ELSE 'watch' END,
+        COUNT(*) || ' open collision action(s)'
+    FROM actions a
+    JOIN vw_capacity_collision c ON c.site_id = a.site_id
+    WHERE a.source = 'collision' AND a.status IN ('open', 'in_progress')
+      AND c.binding_quarters_to_wall IS NOT NULL
+
+    UNION ALL
+    -- 4. utilization corridor compliance (space types inside their target band)
+    SELECT 4, 'util_corridor_compliance', 'Utilization corridor compliance (in target band)',
+        COALESCE(ROUND(100.0 * SUM(CASE WHEN sc.current_util_pct BETWEEN st.target_util_low AND st.target_util_high
+                                        THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1), 0),
+        'pct', 'target >= 60% in-band',
+        CASE WHEN COALESCE(100.0 * SUM(CASE WHEN sc.current_util_pct BETWEEN st.target_util_low AND st.target_util_high
+                                            THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 0) >= 60
+             THEN 'ok' ELSE 'watch' END,
+        COUNT(*) || ' confirmed space(s) measured'
+    FROM vw_space_collision sc
+    JOIN space_types st ON st.space_type_id = sc.space_type_id
+    WHERE sc.current_util_pct IS NOT NULL
+
+    UNION ALL
+    -- 5. day-one readiness (imminent cohorts fully ready)
+    SELECT 5, 'day_one_readiness', 'Day-one readiness (imminent cohorts fully ready)',
+        COALESCE(MAX(portfolio_pct_fully_ready), 100.0),
+        'pct', 'target = 100%',
+        CASE WHEN COALESCE(MAX(portfolio_pct_fully_ready), 100) >= 100 THEN 'ok' ELSE 'watch' END,
+        (SELECT COUNT(*) || ' imminent cohort(s)' FROM vw_day_one_readiness WHERE is_imminent = 1)
+    FROM vw_day_one_readiness
+
+    UNION ALL
+    -- 6. open plan-reconciliation deltas (space can't hold the pipeline)
+    SELECT 6, 'plan_reconciliation_gaps', 'Sites where space cannot hold the hiring pipeline',
+        COALESCE(SUM(CASE WHEN delta_supportable_vs_pipeline < 0 THEN 1 ELSE 0 END), 0),
+        'sites', 'target = 0',
+        CASE WHEN COALESCE(SUM(CASE WHEN delta_supportable_vs_pipeline < 0 THEN 1 ELSE 0 END), 0) > 0
+             THEN 'AT RISK' ELSE 'ok' END,
+        COUNT(*) || ' site(s) reconciled'
+    FROM vw_plan_reconciliation
+) ORDER BY sort_order;

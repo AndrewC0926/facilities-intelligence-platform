@@ -1,0 +1,9 @@
+site_id,space_type_id,milestone,planned_date,actual_date
+space-domain,5,design_approval,2025-10-01,2025-11-15
+space-domain,5,construction,2026-03-01,2026-04-10
+space-domain,5,inspection,2026-08-01,
+space-domain,5,accreditation,2026-12-01,
+composites-uav,5,design_approval,2025-06-01,2025-06-20
+composites-uav,5,construction,2025-12-01,2026-01-10
+composites-uav,5,inspection,2026-04-01,2026-04-15
+composites-uav,5,accreditation,2026-06-01,2026-06-25

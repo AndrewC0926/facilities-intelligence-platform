@@ -266,24 +266,27 @@ def seed_acquired():
 #    and the kona-test-range orphan, which has NO canonical site), and the maritime
 #    quality hotspot. created_at dates span the age bands as viewed around mid-2026.
 def seed_actions():
+    # Phase 4: collision-source actions carry cost-of-delay economics
+    # (est_remedy_cost_usd, est_delay_cost_usd_per_quarter); others leave them blank.
     rows = [
-        # site_id, source, title, owner, due_date, status, resolution_note, created_at
+        # site_id, source, title, owner, due_date, status, resolution_note, created_at, remedy_cost, delay_cost_per_q
         ["arsenal-campus", "collision",
          "Arsenal POWER breach 2026-Q4 — decide: substation upgrade vs. shift Roadrunner line",
-         "VP Facilities", "2026-07-31", "open", "", "2026-03-15"],         # ~red (>60d)
+         "VP Facilities", "2026-07-31", "open", "", "2026-03-15", 3500000, 1200000],   # ~red (>60d)
         ["advanced-imaging", "reconciliation",
          "Sign off advanced-imaging lease: USD $1.2M (kept) vs CAD $1.5M row",
-         "Lease Admin", "2026-06-20", "open", "", "2026-04-25"],           # ~yellow (30-60d)
+         "Lease Admin", "2026-06-20", "open", "", "2026-04-25", "", ""],               # ~yellow (30-60d)
         ["",             "reconciliation",
          "Resolve orphan quality record for unknown site 'kona-test-range'",
-         "Data Steward", "2026-06-18", "in_progress", "", "2026-04-30"],   # ~yellow, no canonical site
+         "Data Steward", "2026-06-18", "in_progress", "", "2026-04-30", "", ""],       # ~yellow, no canonical site
         ["maritime-systems", "quality",
          "Maritime pressure-hull weld porosity — root-cause the recurring scrap",
-         "Quality Director", "2026-07-15", "open", "", "2026-05-20"],      # ~green (<30d)
+         "Quality Director", "2026-07-15", "open", "", "2026-05-20", "", ""],          # ~green (<30d)
     ]
     return _write("actions.csv",
                   ["site_id", "source", "title", "owner", "due_date", "status",
-                   "resolution_note", "created_at"], rows)
+                   "resolution_note", "created_at", "est_remedy_cost_usd",
+                   "est_delay_cost_usd_per_quarter"], rows)
 
 
 # =============================================================================
@@ -310,15 +313,16 @@ def seed_archetypes():
 
 def seed_space_types():
     rows = [
-        # space_type_id, name, unit_label, lead_time_days, restricted_sensing
-        [1, "desk",          "seat",    30,  0],
-        [2, "bench",         "bench",   90,  0],
-        [3, "workstation",   "station", 120, 0],
-        [4, "parking_stall", "stall",   270, 0],
-        [5, "scif_seat",     "seat",    540, 1],   # accredited: sensor occupancy unavailable (ICD 705)
+        # space_type_id, name, unit_label, lead_time_days, restricted_sensing, target_util_low, target_util_high
+        [1, "desk",          "seat",    30,  0, 60, 85],
+        [2, "bench",         "bench",   90,  0, 60, 85],
+        [3, "workstation",   "station", 120, 0, 60, 85],
+        [4, "parking_stall", "stall",   270, 0, 60, 85],
+        [5, "scif_seat",     "seat",    540, 1, 60, 85],   # accredited: sensor occupancy unavailable (ICD 705)
     ]
     return _write("space_types.csv",
-                  ["space_type_id", "name", "unit_label", "lead_time_days", "restricted_sensing"], rows)
+                  ["space_type_id", "name", "unit_label", "lead_time_days", "restricted_sensing",
+                   "target_util_low", "target_util_high"], rows)
 
 
 def seed_archetype_space_map():
@@ -398,12 +402,104 @@ def seed_requisition_pipeline():
                   ["site_id", "archetype_id", "quarter", "open_reqs", "avg_time_to_fill_days"], rows)
 
 
+# =============================================================================
+# PHASE 4 — CROSS-FUNCTIONAL & KPI (accountability) LAYER
+# =============================================================================
+# Deterministic data that exercises every Phase 4 path: two forecast run dates to
+# score, one incentive AT RISK + one compliant, one accreditation mid-construction
+# (stays unconfirmed) + one fully accredited (flips to confirmed), one onboarding
+# cohort missing a readiness dimension one quarter out. No site is special-cased in
+# any view — these just light up the code paths.
+
+def seed_forecast_snapshots():
+    # Two run dates of past space-collision predictions. The LATER snapshot is treated
+    # as the closer-to-truth 'actual'; the earlier one is scored against it. Space
+    # type ids: desk=1, parking_stall=4, scif_seat=5.
+    rows = [
+        # snapshot_date, site_id, space_type_id, predicted_breach_quarter, predicted_util_pct
+        # -- run 1 (older forecast) --
+        ["2026-01-15", "arsenal-campus", 4, "2027-Q1", 78.0],   # forecast the parking wall a quarter LATE
+        ["2026-01-15", "hq-flagship",    5, "2027-Q2", 95.0],   # SCIF forecast on the money
+        ["2026-01-15", "seattle-hub",    1, "2026-Q4", 88.0],   # desk forecast on the money
+        # -- run 2 (newer 'actual') --
+        ["2026-04-15", "arsenal-campus", 4, "2026-Q4", 83.0],   # revised earlier -> run 1 was 1 quarter off
+        ["2026-04-15", "hq-flagship",    5, "2027-Q2", 100.0],  # same quarter -> run 1 was a hit
+        ["2026-04-15", "seattle-hub",    1, "2026-Q4", 100.0],  # same quarter -> run 1 was a hit
+    ]
+    return _write("forecast_snapshots.csv",
+                  ["snapshot_date", "site_id", "space_type_id",
+                   "predicted_breach_quarter", "predicted_util_pct"], rows)
+
+
+def seed_incentive_agreements():
+    # One AT RISK (measurement inside the 180-day window WITH a jobs shortfall) and
+    # one compliant (met, far off). actual jobs are read from HRIS in the view.
+    rows = [
+        # site_id, authority, committed_jobs, committed_capex_usd, actual_capex_usd, measurement_date, clawback_risk_usd
+        ["long-beach",     "CA GO-Biz",      500,  100000000, 60000000,  "2026-09-15", 8000000],   # AT RISK: ~76d out, 100 of 500 jobs
+        ["arsenal-campus", "Ohio JobsOhio",  4000, 500000000, 540000000, "2027-06-01", 0],         # compliant: 5,200 jobs, capex met
+    ]
+    return _write("incentive_agreements.csv",
+                  ["site_id", "authority", "committed_jobs", "committed_capex_usd",
+                   "actual_capex_usd", "measurement_date", "clawback_risk_usd"], rows)
+
+
+def seed_accreditation_milestones():
+    # Two subjects (chosen so neither disturbs the Phase 3 collision story):
+    #   space-domain scif_seat  -> mid-construction, final milestone unmet -> stays audit_pending
+    #   composites-uav scif_seat -> fully accredited -> its (audit_pending) capacity flips to confirmed
+    # (composites has no cleared staff, so this adds capacity with no demand -> no collision impact.)
+    rows = [
+        # site_id, space_type_id, milestone, planned_date, actual_date
+        # space-domain SCIF — accreditation still in construction/inspection
+        ["space-domain",  5, "design_approval", "2025-10-01", "2025-11-15"],
+        ["space-domain",  5, "construction",    "2026-03-01", "2026-04-10"],
+        ["space-domain",  5, "inspection",      "2026-08-01", ""],           # not yet met
+        ["space-domain",  5, "accreditation",   "2026-12-01", ""],           # FINAL not met -> unconfirmed
+        # composites-uav SCIF — fully accredited (all milestones have actual dates)
+        ["composites-uav", 5, "design_approval", "2025-06-01", "2025-06-20"],
+        ["composites-uav", 5, "construction",    "2025-12-01", "2026-01-10"],
+        ["composites-uav", 5, "inspection",      "2026-04-01", "2026-04-15"],
+        ["composites-uav", 5, "accreditation",   "2026-06-01", "2026-06-25"],  # FINAL met -> flips to confirmed
+    ]
+    return _write("accreditation_milestones.csv",
+                  ["site_id", "space_type_id", "milestone", "planned_date", "actual_date"], rows)
+
+
+def seed_onboarding_cohorts():
+    # Current quarter (latest HRIS) is 2026-Q3; "one quarter out" = 2026-Q4.
+    #   arsenal production cohort: one quarter out, EQUIPMENT not ready -> flagged
+    #   hq cleared cohort:         one quarter out, fully ready         -> not flagged
+    #   seattle engineer cohort:   far out (2027-Q2)                    -> not imminent
+    rows = [
+        # site_id, archetype_id, start_quarter, headcount, seat_ready, equipment_ready, badge_ready, parking_ready
+        ["arsenal-campus", 1, "2026-Q4", 200, 1, 0, 1, 1],   # missing equipment, one quarter out
+        ["hq-flagship",    3, "2026-Q4", 50,  1, 1, 1, 1],   # fully ready
+        ["seattle-hub",    2, "2027-Q2", 100, 0, 0, 1, 1],   # far out -> excluded from readiness window
+    ]
+    return _write("onboarding_cohorts.csv",
+                  ["site_id", "archetype_id", "start_quarter", "headcount",
+                   "seat_ready", "equipment_ready", "badge_ready", "parking_ready"], rows)
+
+
+def seed_phase4_space_capacity():
+    # An extra SCIF capacity at composites-uav that is 'audit_pending' but fully
+    # accredited (see milestones) -> vw_space_capacity_effective flips it to confirmed.
+    # composites has no cleared staff, so there is no scif demand -> no collision impact.
+    rows = [["composites-uav", 5, 200, "audit_pending"]]
+    return _write("space_capacity_phase4.csv",
+                  ["site_id", "space_type_id", "capacity", "capacity_status"], rows)
+
+
 def main():
     paths = [
         seed_sites(), seed_leases(), seed_hris(), seed_mrp(),
         seed_programs(), seed_quality(), seed_acquired(), seed_actions(),
         seed_archetypes(), seed_space_types(), seed_archetype_space_map(),
         seed_space_capacity(), seed_requisition_pipeline(),
+        seed_forecast_snapshots(), seed_incentive_agreements(),
+        seed_accreditation_milestones(), seed_onboarding_cohorts(),
+        seed_phase4_space_capacity(),
     ]
     print("Seeded source-system exports:")
     for p in paths:

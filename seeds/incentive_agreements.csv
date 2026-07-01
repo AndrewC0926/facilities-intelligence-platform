@@ -1,0 +1,3 @@
+site_id,authority,committed_jobs,committed_capex_usd,actual_capex_usd,measurement_date,clawback_risk_usd
+long-beach,CA GO-Biz,500,100000000,60000000,2026-09-15,8000000
+arsenal-campus,Ohio JobsOhio,4000,500000000,540000000,2027-06-01,0

@@ -1,0 +1,3 @@
+site_id,site_name,space_type_id,space_type,milestones_met,milestones_total,current_stage,next_stage,max_slip_days,accreditation_complete,pipeline_status
+composites-uav,Composites & UAV Integration,5,scif_seat,4,4,accreditation,,40,1,accredited — capacity confirmed
+space-domain,Space Domain Campus,5,scif_seat,2,4,construction,inspection,45,0,in progress — capacity unconfirmed
