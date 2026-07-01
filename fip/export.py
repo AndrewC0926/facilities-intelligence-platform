@@ -29,6 +29,13 @@ PUBLISHED_VIEWS = [
     "vw_space_collision",
     "vw_time_to_seat",
     "vw_plan_reconciliation",
+    "vw_space_capacity_effective",
+    "vw_accreditation_pipeline",
+    "vw_forecast_accuracy",
+    "vw_cost_of_delay",
+    "vw_incentive_compliance",
+    "vw_day_one_readiness",
+    "vw_kpi_scorecard",
 ]
 
 

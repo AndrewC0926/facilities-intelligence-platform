@@ -1,0 +1,2 @@
+action_id,site_id,site_name,title,constraint_type,breach_quarter,quarters_to_wall,cost_act_now_usd,cost_act_at_wall_usd,cost_of_delay_usd,delay_cost_per_quarter_usd
+1,arsenal-campus,Arsenal Campus,Arsenal POWER breach 2026-Q4 — decide: substation upgrade vs. shift Roadrunner line,power,2026-Q4,1,3500000.0,4700000.0,1200000.0,1200000.0

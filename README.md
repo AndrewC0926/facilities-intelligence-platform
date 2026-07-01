@@ -55,7 +55,7 @@ and recommends shifting overflow to HQ & Flagship Factory (same region, ample sl
 ```
 1. SOURCES   simulated exports → seeds/*.csv      (ERP/CMMS · MRP · HRIS · acquired-site dump)
 2. INGEST    fip/etl.py        → cleans & reconciles dirty data into one canonical model
-3. STORE     sql/schema.sql    → 13 normalized tables in SQLite (fip.db)
+3. STORE     sql/schema.sql    → 18 normalized tables in SQLite (fip.db)
 4. SEMANTIC  sql/views.sql     → documented SQL views = the business logic (THE PRODUCT)
 5. DELIVERY  app/dashboard.py  → reads the views (so does Tableau) · tableau_export/*.csv
 ```
@@ -76,9 +76,9 @@ make demo          # seed → build → reconcile → export → launch the dash
 ```
 
 `make demo` builds everything and serves the dashboard at `http://localhost:8501`.
-The dashboard is organized into tabs — Capacity & Scenario, Programs, Occupancy &
-Seats, Actions, Lease Cliff, Site Health, Reconciliation, Quality & Cost, and a
-30-second issue-intake form. It also self-bootstraps: point it at an empty checkout
+The dashboard is organized into tabs — Scorecard, Capacity & Scenario, Programs,
+Occupancy & Seats, Actions, Lease Cliff, Site Health, Reconciliation, Quality & Cost,
+and a 30-second issue-intake form. It also self-bootstraps: point it at an empty checkout
 and it builds its own database on first launch.
 
 Prefer the pieces individually:
@@ -87,7 +87,7 @@ Prefer the pieces individually:
 make pipeline      # build everything, no dashboard (writes the DB, the reconciliation
                    # report, and one clean CSV per view in tableau_export/)
 make dashboard     # serve the dashboard against an existing build
-make test          # run the full test suite (65 tests)
+make test          # run the full test suite (74 tests)
 ```
 
 And two things you can run straight from the terminal:
@@ -101,7 +101,7 @@ python -m fip.ask collision            # ask a one-off question against the live
 
 ## The semantic layer — what each view answers
 
-These fifteen SQL views *are* the product. Each one carries a comment block stating the
+These twenty-two SQL views *are* the product. Each one carries a comment block stating the
 business question, who asks it, and how often it refreshes.
 
 | View | The question it answers |
@@ -121,6 +121,13 @@ business question, who asks it, and how often it refreshes.
 | `vw_space_collision` ★ | Which **space type** runs out first at each site — parking, SCIF seats, benches, desks? |
 | `vw_time_to_seat` | Where does building the seat take longer than hiring the person (facilities is the bottleneck)? |
 | `vw_plan_reconciliation` | Where do authorized, pipeline-implied, and space-supportable headcount disagree? |
+| `vw_kpi_scorecard` ★ | The COO scorecard — one row per KPI; the platform grades itself. |
+| `vw_forecast_accuracy` | How good were our earlier breach forecasts (hit/miss, error in quarters)? |
+| `vw_cost_of_delay` | For each breach, what does it cost to act now vs. wait until the wall? |
+| `vw_incentive_compliance` | Are we meeting the job/capex commitments behind our public incentives? |
+| `vw_accreditation_pipeline` | What stage is each pending space in, and is its capacity confirmable yet? |
+| `vw_space_capacity_effective` | Which planned/audit-pending capacity has actually cleared accreditation? |
+| `vw_day_one_readiness` | For imminent onboarding cohorts, is every day-one need in place? |
 
 ### Worked example — the question → the view → the decision
 
@@ -266,6 +273,40 @@ never assumes a sensor it cannot have.
 
 ---
 
+## Phase 4: Accountability layer
+
+A planning tool is only credible if it reports against the KPIs the person it serves
+would actually set, and if it grades its own homework. A COO does not want another
+dashboard of everything; they want a short scorecard that answers *"is facilities
+ever the bottleneck, and are we getting there at the lowest capital cost?"* — and
+they want to know whether last quarter's confident forecast turned out to be right.
+Phase 4 adds that scorecard. `vw_kpi_scorecard` rolls the whole platform into one row
+per KPI — worst-case time-to-seat versus time-to-fill, forecast accuracy, the share
+of actions opened while there was still lead time, utilization-corridor compliance,
+day-one readiness, and the open plan-reconciliation gaps — and the executive brief now
+opens with it. Around it sit the mechanisms that make each number real: a cost-of-delay
+view that prices acting now against acting at the wall, an incentive-compliance view
+that holds each site to its public job and capex commitments (reusing the lease-cliff
+180-day window), an accreditation pipeline where a *planned* or *audit-pending* SCIF
+counts as confirmed capacity only once its final milestone actually lands, and a
+day-one-readiness view that flags cohorts arriving without a seat, badge, equipment, or
+parking.
+
+Crucially, the platform now **scores its own forecasts.** Every pipeline run appends
+its current space-collision predictions to `forecast_snapshots`; `vw_forecast_accuracy`
+later scores those aged snapshots against the closer-to-truth actuals and reports
+hit/miss and error in quarters — accuracy becomes computable, not claimed. And because
+every decision has a blast radius, `python -m fip.diff --program X --target N` replays
+one program-target change through the same scenario logic and prints a before/after of
+exactly which breach dates, binding constraints, and cost-of-delay figures moved —
+nothing that isn't downstream of the change is allowed to shift. As with every earlier
+phase, all of this is configuration as data (KPI corridors, lead times, commitments,
+milestones are rows, not constants), the business logic lives entirely in SQL views,
+and no site is named anywhere in the model — a facility added tomorrow flows through
+the scorecard with zero code changes.
+
+---
+
 ## Roadmap
 
 The platform today reasons over a largely **static plan**. The next steps make it
@@ -290,7 +331,7 @@ owned action, to a funded decision.
 
 ---
 
-## The data model (13 tables)
+## The data model (18 tables)
 
 The portfolio is **10 sites** — a flagship mega-factory (Arsenal Campus), a campus
 under construction (Long Beach), a rocket-motor complex, an undersea-systems
@@ -312,6 +353,10 @@ Shark, ALTIUS, Bolt, SRM Supply, Lattice OS).
 | `archetype_space_map` | occupancy config | how much of each space type one worker of an archetype consumes (ratios as data) |
 | `space_capacity` | occupancy | per-site supply per space type, with `capacity_status` (confirmed / audit_pending / planned) |
 | `requisition_pipeline` | **ATS** (leading) | open reqs + time-to-fill per site/archetype/quarter — the leading indicator |
+| `forecast_snapshots` | self-scoring | each run's space-collision predictions, stamped by date, for later grading |
+| `incentive_agreements` | Corp Dev / finance | public job & capex commitments, measurement date, clawback risk |
+| `accreditation_milestones` | Security / build | design → construction → inspection → accreditation dates per site/space |
+| `onboarding_cohorts` | HR / onboarding | cohorts by start quarter with seat/equipment/badge/parking readiness |
 
 See [`sql/schema.sql`](sql/schema.sql) for the full definitions, plus `etl_exceptions`,
 the quarantine table where un-reconcilable rows wait for a human.
@@ -327,5 +372,5 @@ fip/        seed.py etl.py reconcile.py          ← generate source data, clean
 app/        dashboard.py                          ← the Streamlit front end (presentation only)
 seeds/      *.csv   (the simulated source-system exports)
 tableau_export/  *.csv   (one clean extract per view — the Tableau handoff)
-tests/      65 tests across ingestion, every view, and all decision/workflow/occupancy logic
+tests/      74 tests across ingestion, every view, and all decision/workflow/occupancy/KPI logic
 ```

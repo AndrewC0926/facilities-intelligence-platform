@@ -15,6 +15,10 @@
 
 PRAGMA foreign_keys = ON;
 
+DROP TABLE IF EXISTS onboarding_cohorts;
+DROP TABLE IF EXISTS accreditation_milestones;
+DROP TABLE IF EXISTS incentive_agreements;
+DROP TABLE IF EXISTS forecast_snapshots;
 DROP TABLE IF EXISTS requisition_pipeline;
 DROP TABLE IF EXISTS space_capacity;
 DROP TABLE IF EXISTS archetype_space_map;
@@ -119,7 +123,10 @@ CREATE TABLE actions (
     due_date         TEXT,                             -- ISO 'YYYY-MM-DD'
     status           TEXT,                             -- 'open' | 'in_progress' | 'resolved'
     resolution_note  TEXT,                             -- filled when resolved
-    created_at       TEXT                              -- ISO 'YYYY-MM-DD' the action was opened
+    created_at       TEXT,                             -- ISO 'YYYY-MM-DD' the action was opened
+    -- Phase 4 cost-of-delay economics (seeded on generated actions):
+    est_remedy_cost_usd            REAL,               -- one-time cost to remedy now
+    est_delay_cost_usd_per_quarter REAL                -- cost accrued for each quarter of delay
 );
 
 -- Program registry: the products the facilities exist to build, mapped to the
@@ -166,7 +173,10 @@ CREATE TABLE space_types (
     name               TEXT NOT NULL UNIQUE,   -- 'desk' | 'bench' | 'workstation' | 'parking_stall' | 'scif_seat'
     unit_label         TEXT,                   -- how one unit is counted ('seat', 'stall', ...)
     lead_time_days     INTEGER,                -- days to provision one more unit of this space
-    restricted_sensing INTEGER NOT NULL DEFAULT 0  -- 1 = accredited, sensor occupancy unavailable (badge/booking only)
+    restricted_sensing INTEGER NOT NULL DEFAULT 0, -- 1 = accredited, sensor occupancy unavailable (badge/booking only)
+    -- Phase 4 utilization corridor (target band as data; default 60-85% healthy):
+    target_util_low    INTEGER NOT NULL DEFAULT 60,  -- below this = under-utilized (wasteful)
+    target_util_high   INTEGER NOT NULL DEFAULT 85   -- above this = at/over the planning wall
 );
 
 -- How much of each space type one worker of an archetype consumes. Ratios are
@@ -204,4 +214,62 @@ CREATE TABLE requisition_pipeline (
     quarter               TEXT NOT NULL,     -- 'YYYY-Qn' the reqs are open
     open_reqs             INTEGER NOT NULL,
     avg_time_to_fill_days INTEGER            -- people-side lead time (vs. space-side lead_time_days)
+);
+
+-- =============================================================================
+-- PHASE 4 — CROSS-FUNCTIONAL & KPI (accountability) LAYER
+-- =============================================================================
+-- These tables let the platform GRADE ITSELF: score its own past forecasts, price
+-- the cost of waiting, hold sites to incentive commitments and accreditation
+-- milestones, and check day-one readiness — all rolled into a KPI scorecard.
+-- Config remains data; no site is named in any view.
+
+-- Forecast self-scoring: every pipeline run appends the CURRENT space-collision
+-- predictions here, stamped with a run date. Aged snapshots are later scored
+-- against newer ones (the closer-to-truth actual) in vw_forecast_accuracy.
+CREATE TABLE forecast_snapshots (
+    snapshot_id             INTEGER PRIMARY KEY,
+    snapshot_date           TEXT NOT NULL,               -- ISO date the forecast was taken
+    site_id                 TEXT NOT NULL REFERENCES sites(site_id),
+    space_type_id           INTEGER NOT NULL REFERENCES space_types(space_type_id),
+    predicted_breach_quarter TEXT,                       -- 'YYYY-Qn' or NULL if none predicted
+    predicted_util_pct      REAL
+);
+
+-- Public-incentive commitments (state/local job & capex deals) and clawback risk.
+CREATE TABLE incentive_agreements (
+    agreement_id       INTEGER PRIMARY KEY,
+    site_id            TEXT NOT NULL REFERENCES sites(site_id),
+    authority          TEXT,                             -- granting body (e.g. state EDC)
+    committed_jobs     INTEGER,
+    committed_capex_usd REAL,
+    actual_capex_usd   REAL,                             -- capex recorded to date (actuals side)
+    measurement_date   TEXT,                             -- ISO date compliance is measured
+    clawback_risk_usd  REAL                              -- $ at risk if the commitment is missed
+);
+
+-- Accreditation / build milestones per site + space type. The final
+-- 'accreditation' milestone gaining an actual_date is what flips a 'planned' or
+-- 'audit_pending' capacity to effectively confirmed (see vw_space_capacity_effective).
+CREATE TABLE accreditation_milestones (
+    milestone_id   INTEGER PRIMARY KEY,
+    site_id        TEXT NOT NULL REFERENCES sites(site_id),
+    space_type_id  INTEGER NOT NULL REFERENCES space_types(space_type_id),
+    milestone      TEXT NOT NULL,   -- 'design_approval' | 'construction' | 'inspection' | 'accreditation'
+    planned_date   TEXT,            -- ISO
+    actual_date    TEXT             -- ISO, NULL until the milestone is met
+);
+
+-- Onboarding cohorts: a group starting at a site in a quarter, and whether each
+-- day-one readiness dimension is in place. Booleans stored as 0/1.
+CREATE TABLE onboarding_cohorts (
+    cohort_id       INTEGER PRIMARY KEY,
+    site_id         TEXT NOT NULL REFERENCES sites(site_id),
+    archetype_id    INTEGER NOT NULL REFERENCES archetypes(archetype_id),
+    start_quarter   TEXT NOT NULL,   -- 'YYYY-Qn'
+    headcount       INTEGER NOT NULL,
+    seat_ready      INTEGER NOT NULL DEFAULT 0,
+    equipment_ready INTEGER NOT NULL DEFAULT 0,
+    badge_ready     INTEGER NOT NULL DEFAULT 0,
+    parking_ready   INTEGER NOT NULL DEFAULT 0
 );

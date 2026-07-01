@@ -1,6 +1,6 @@
-space_type_id,name,unit_label,lead_time_days,restricted_sensing
-1,desk,seat,30,0
-2,bench,bench,90,0
-3,workstation,station,120,0
-4,parking_stall,stall,270,0
-5,scif_seat,seat,540,1
+space_type_id,name,unit_label,lead_time_days,restricted_sensing,target_util_low,target_util_high
+1,desk,seat,30,0,60,85
+2,bench,bench,90,0,60,85
+3,workstation,station,120,0,60,85
+4,parking_stall,stall,270,0,60,85
+5,scif_seat,seat,540,1,60,85

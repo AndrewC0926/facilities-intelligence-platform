@@ -74,11 +74,26 @@ scenario_rows = scenario.apply(base_collision, multipliers)
 today = datetime.date.today()
 cliff_rows = load_rows("SELECT * FROM vw_lease_cliff")
 
-(tab_cap, tab_programs, tab_occupancy, tab_actions, tab_lease, tab_health,
- tab_recon, tab_quality, tab_intake) = st.tabs([
-    "⚠️ Capacity & Scenario", "🚀 Programs", "🪑 Occupancy & Seats", "✅ Actions",
-    "📅 Lease Cliff", "💚 Site Health", "🔁 Reconciliation", "🧪 Quality & Cost",
-    "📝 Report Issue"])
+(tab_scorecard, tab_cap, tab_programs, tab_occupancy, tab_actions, tab_lease,
+ tab_health, tab_recon, tab_quality, tab_intake) = st.tabs([
+    "📊 Scorecard", "⚠️ Capacity & Scenario", "🚀 Programs", "🪑 Occupancy & Seats",
+    "✅ Actions", "📅 Lease Cliff", "💚 Site Health", "🔁 Reconciliation",
+    "🧪 Quality & Cost", "📝 Report Issue"])
+
+# === Tab: Scorecard ===========================================================
+with tab_scorecard:
+    st.subheader("KPI scorecard")
+    st.caption("Source: `vw_kpi_scorecard` — the KPIs a COO would set (facilities never "
+               "the bottleneck, forecasts graded, capital on time, space in its corridor, "
+               "people ready day one). One row per KPI; the platform grades itself.")
+    kpis = load("SELECT kpi_label, value, unit, target, status, detail FROM vw_kpi_scorecard")
+    cols = st.columns(len(kpis)) if 0 < len(kpis) <= 6 else [st]
+    for i, (_, r) in enumerate(kpis.iterrows()):
+        (cols[i] if len(cols) > 1 else st).metric(
+            r["kpi_label"].split("(")[0].strip(), f"{r['value']:g} {r['unit']}", r["status"])
+    _bg = {"AT RISK": "background-color:#f8d7da", "watch": "background-color:#fff3cd", "ok": ""}
+    st.dataframe(kpis.style.apply(lambda row: [_bg.get(row["status"], "")] * len(row), axis=1),
+                 use_container_width=True, hide_index=True)
 
 # === Tab: Capacity & Scenario =================================================
 with tab_cap:

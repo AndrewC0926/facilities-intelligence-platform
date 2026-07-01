@@ -235,10 +235,12 @@ def load_actions(conn, known):
         raw_site = (r["site_id"] or "").strip()
         site = canonicalize_code(raw_site, known) if raw_site else None
         conn.execute(
-            "INSERT INTO actions VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO actions VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (i, site, r["source"], r["title"], r["owner"] or None,
              r["due_date"] or None, r["status"], r["resolution_note"] or None,
-             r["created_at"] or None))
+             r["created_at"] or None,
+             parse_money(r.get("est_remedy_cost_usd")),
+             parse_money(r.get("est_delay_cost_usd_per_quarter"))))
 
 
 def load_programs(conn):
@@ -262,9 +264,10 @@ def load_occupancy(conn, known):
         conn.execute("INSERT INTO archetypes VALUES (?,?,?)",
                      (int(r["archetype_id"]), r["name"], r["description"] or None))
     for r in _read_csv("space_types.csv"):
-        conn.execute("INSERT INTO space_types VALUES (?,?,?,?,?)",
+        conn.execute("INSERT INTO space_types VALUES (?,?,?,?,?,?,?)",
                      (int(r["space_type_id"]), r["name"], r["unit_label"] or None,
-                      parse_int(r["lead_time_days"]), int(r["restricted_sensing"])))
+                      parse_int(r["lead_time_days"]), int(r["restricted_sensing"]),
+                      parse_int(r["target_util_low"]), parse_int(r["target_util_high"])))
     for r in _read_csv("archetype_space_map.csv"):
         conn.execute("INSERT INTO archetype_space_map VALUES (?,?,?)",
                      (int(r["archetype_id"]), int(r["space_type_id"]), float(r["ratio"])))
@@ -284,6 +287,49 @@ def load_occupancy(conn, known):
                       int(r["open_reqs"]), parse_int(r["avg_time_to_fill_days"])))
 
 
+def load_phase4(conn, known):
+    """Load the Phase 4 accountability tables. All config-as-data; the extra
+    space_capacity row demonstrates the accreditation-driven confirm flip."""
+    for r in _read_csv("space_capacity_phase4.csv"):
+        site = canonicalize_code(r["site_id"], known)
+        if site is None:
+            continue
+        conn.execute("INSERT INTO space_capacity VALUES (?,?,?,?)",
+                     (site, int(r["space_type_id"]), parse_int(r["capacity"]),
+                      r["capacity_status"] or "confirmed"))
+    for i, r in enumerate(_read_csv("forecast_snapshots.csv"), start=1):
+        site = canonicalize_code(r["site_id"], known)
+        if site is None:
+            continue
+        conn.execute("INSERT INTO forecast_snapshots VALUES (?,?,?,?,?,?)",
+                     (i, r["snapshot_date"], site, int(r["space_type_id"]),
+                      r["predicted_breach_quarter"] or None,
+                      parse_money(r["predicted_util_pct"])))
+    for i, r in enumerate(_read_csv("incentive_agreements.csv"), start=1):
+        site = canonicalize_code(r["site_id"], known)
+        if site is None:
+            continue
+        conn.execute("INSERT INTO incentive_agreements VALUES (?,?,?,?,?,?,?,?)",
+                     (i, site, r["authority"] or None, parse_int(r["committed_jobs"]),
+                      parse_money(r["committed_capex_usd"]), parse_money(r["actual_capex_usd"]),
+                      r["measurement_date"] or None, parse_money(r["clawback_risk_usd"])))
+    for i, r in enumerate(_read_csv("accreditation_milestones.csv"), start=1):
+        site = canonicalize_code(r["site_id"], known)
+        if site is None:
+            continue
+        conn.execute("INSERT INTO accreditation_milestones VALUES (?,?,?,?,?,?)",
+                     (i, site, int(r["space_type_id"]), r["milestone"],
+                      r["planned_date"] or None, r["actual_date"] or None))
+    for i, r in enumerate(_read_csv("onboarding_cohorts.csv"), start=1):
+        site = canonicalize_code(r["site_id"], known)
+        if site is None:
+            continue
+        conn.execute("INSERT INTO onboarding_cohorts VALUES (?,?,?,?,?,?,?,?,?)",
+                     (i, site, int(r["archetype_id"]), to_quarter(r["start_quarter"]),
+                      int(r["headcount"]), int(r["seat_ready"]), int(r["equipment_ready"]),
+                      int(r["badge_ready"]), int(r["parking_ready"])))
+
+
 def load_all(conn):
     """Run the full ingest into a freshly-schema'd connection. Returns a report dict."""
     report = {"actions": [], "conflicts": [], "exceptions": [],
@@ -297,6 +343,7 @@ def load_all(conn):
     load_actions(conn, known)
     load_programs(conn)
     load_occupancy(conn, known)
+    load_phase4(conn, known)
     conn.commit()
     return report
 

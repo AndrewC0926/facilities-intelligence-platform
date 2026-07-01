@@ -1,0 +1,4 @@
+site_id,archetype_id,start_quarter,headcount,seat_ready,equipment_ready,badge_ready,parking_ready
+arsenal-campus,1,2026-Q4,200,1,0,1,1
+hq-flagship,3,2026-Q4,50,1,1,1,1
+seattle-hub,2,2027-Q2,100,0,0,1,1

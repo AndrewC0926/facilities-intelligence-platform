@@ -1,0 +1,7 @@
+snapshot_date,site_id,space_type_id,predicted_breach_quarter,predicted_util_pct
+2026-01-15,arsenal-campus,4,2027-Q1,78.0
+2026-01-15,hq-flagship,5,2027-Q2,95.0
+2026-01-15,seattle-hub,1,2026-Q4,88.0
+2026-04-15,arsenal-campus,4,2026-Q4,83.0
+2026-04-15,hq-flagship,5,2027-Q2,100.0
+2026-04-15,seattle-hub,1,2026-Q4,100.0

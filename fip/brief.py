@@ -98,6 +98,21 @@ def _actions(at_risk, rows, recon, exceptions):
     return "\n".join(lines)
 
 
+def _scorecard_section(scorecard):
+    """The COO scorecard as a compact Markdown table; every KPI row from vw_kpi_scorecard."""
+    if not scorecard:
+        return "_No KPI rows._"
+    at_risk = [k for k in scorecard if k["status"] in ("AT RISK", "watch")]
+    lead = ("**All KPIs green.**" if not at_risk else
+            f"**{len(at_risk)} KPI(s) need attention:** "
+            + ", ".join(k["kpi_label"].split("(")[0].strip() for k in at_risk) + ".")
+    lines = [lead, "", "| KPI | Value | Status | Detail |", "|---|---|---|---|"]
+    for k in scorecard:
+        val = f"{k['value']:g} {k['unit']}"
+        lines.append(f"| {k['kpi_label']} | {val} | {k['status']} | {k['detail']} |")
+    return "\n".join(lines)
+
+
 def _space_section(space_binding, bottlenecks):
     """Top space bottleneck portfolio-wide + any facilities-is-the-bottleneck flags.
     Reads the views only — no site names or space types are hardcoded."""
@@ -146,6 +161,7 @@ def render(conn=None, today=None, multipliers=None):
         space_bottlenecks = db.query(
             conn, "SELECT * FROM vw_time_to_seat WHERE bottleneck_flag = 'facilities_bottleneck' "
             "ORDER BY (time_to_seat_days - time_to_fill_days) DESC, site_name")
+        scorecard = db.query(conn, "SELECT * FROM vw_kpi_scorecard")
     finally:
         if own:
             conn.close()
@@ -167,8 +183,12 @@ def render(conn=None, today=None, multipliers=None):
                              + ", ".join(f"{k}×{v:g}" for k, v in active.items()) + "._\n")
 
     md = f"""# Facilities Intelligence — Executive Brief
-_Generated {today.isoformat()} from the live semantic views (`vw_capacity_collision`, `vw_reconciliation_status`, `vw_open_actions`, `vw_integration_pipeline`)._
+_Generated {today.isoformat()} from the live semantic views (`vw_kpi_scorecard`, `vw_capacity_collision`, `vw_reconciliation_status`, `vw_open_actions`, `vw_integration_pipeline`)._
 {scenario_note}
+## KPI scorecard
+
+{_scorecard_section(scorecard)}
+
 ## Headline risk
 
 {_headline(at_risk)}
