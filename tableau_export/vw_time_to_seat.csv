@@ -1,0 +1,7 @@
+site_id,site_name,archetype,open_reqs,time_to_fill_days,binding_space_type,time_to_seat_days,bottleneck_flag
+arsenal-campus,Arsenal Campus,production,300,45,parking_stall,270,facilities_bottleneck
+hq-flagship,HQ & Flagship Factory,cleared,120,200,scif_seat,540,facilities_bottleneck
+long-beach,Long Beach Campus,engineer,60,80,,,ok
+maritime-systems,Maritime Systems Factory,engineer,30,70,desk,30,ok
+seattle-hub,Seattle Engineering Hub,engineer,150,75,desk,30,ok
+srm-complex,Solid Rocket Motor Complex,production,40,60,workstation,120,facilities_bottleneck

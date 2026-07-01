@@ -98,6 +98,32 @@ def _actions(at_risk, rows, recon, exceptions):
     return "\n".join(lines)
 
 
+def _space_section(space_binding, bottlenecks):
+    """Top space bottleneck portfolio-wide + any facilities-is-the-bottleneck flags.
+    Reads the views only — no site names or space types are hardcoded."""
+    lines = []
+    if space_binding:
+        top = space_binding[0]
+        when = top["breach_quarter"] or "now"
+        lines.append(
+            f"- **Top space bottleneck:** {top['site_name']} runs out of "
+            f"**{top['space_type']}** ({top['space_status']}, ~{when}) — the binding "
+            f"space type there, not desks.")
+    else:
+        lines.append("- No space type is projected to hit its wall this cycle.")
+    if bottlenecks:
+        lines.append(
+            f"- **Facilities is the bottleneck** at {len(bottlenecks)} site/archetype "
+            f"pairing(s) — space takes longer to build than the person takes to hire:")
+        for b in bottlenecks:
+            lines.append(
+                f"  - {b['site_name']} · {b['archetype']}: {b['binding_space_type']} "
+                f"lead {b['time_to_seat_days']}d vs. fill {b['time_to_fill_days']}d.")
+    else:
+        lines.append("- No facilities-is-the-bottleneck flags: hiring gates growth, not space.")
+    return "\n".join(lines)
+
+
 def render(conn=None, today=None, multipliers=None):
     """Build the brief as a Markdown string from the live views."""
     own = conn is None
@@ -113,6 +139,13 @@ def render(conn=None, today=None, multipliers=None):
             conn, "SELECT source_file, reason FROM etl_exceptions ORDER BY exception_id")
         action_summary = actions.summary(conn, today)
         pipeline = db.query(conn, "SELECT * FROM vw_integration_pipeline")
+        space_binding = db.query(
+            conn, "SELECT * FROM vw_space_collision WHERE is_binding = 1 "
+            "AND space_status IN ('AT THE WALL NOW', 'COLLISION WARNING', 'watch') "
+            "ORDER BY quarters_to_wall, site_name")
+        space_bottlenecks = db.query(
+            conn, "SELECT * FROM vw_time_to_seat WHERE bottleneck_flag = 'facilities_bottleneck' "
+            "ORDER BY (time_to_seat_days - time_to_fill_days) DESC, site_name")
     finally:
         if own:
             conn.close()
@@ -167,6 +200,10 @@ power. The binding constraint is whichever wall is hit first.
 ## Action tracker
 
 - **{action_summary['open_count']}** open action(s) being tracked; {aging}.
+
+## Seat &amp; space bottlenecks
+
+{_space_section(space_binding, space_bottlenecks)}
 
 ## Recommended actions
 

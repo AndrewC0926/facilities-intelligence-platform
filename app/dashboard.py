@@ -74,10 +74,11 @@ scenario_rows = scenario.apply(base_collision, multipliers)
 today = datetime.date.today()
 cliff_rows = load_rows("SELECT * FROM vw_lease_cliff")
 
-(tab_cap, tab_programs, tab_actions, tab_lease, tab_health,
+(tab_cap, tab_programs, tab_occupancy, tab_actions, tab_lease, tab_health,
  tab_recon, tab_quality, tab_intake) = st.tabs([
-    "⚠️ Capacity & Scenario", "🚀 Programs", "✅ Actions", "📅 Lease Cliff",
-    "💚 Site Health", "🔁 Reconciliation", "🧪 Quality & Cost", "📝 Report Issue"])
+    "⚠️ Capacity & Scenario", "🚀 Programs", "🪑 Occupancy & Seats", "✅ Actions",
+    "📅 Lease Cliff", "💚 Site Health", "🔁 Reconciliation", "🧪 Quality & Cost",
+    "📝 Report Issue"])
 
 # === Tab: Capacity & Scenario =================================================
 with tab_cap:
@@ -155,6 +156,54 @@ with tab_programs:
     else:
         st.success("No programs sit behind an imminent facilities constraint.")
     st.dataframe(progs, use_container_width=True, hide_index=True)
+
+# === Tab: Occupancy & Seats ===================================================
+with tab_occupancy:
+    st.subheader("Occupancy & seat demand")
+    st.caption("Sources: `vw_space_collision`, `vw_time_to_seat`, `vw_plan_reconciliation`. "
+               "\"Headcount\" is N demand curves: worker archetypes consume different space "
+               "types at different ratios. Desks are rarely what binds at industrial sites. "
+               "SCIF utilization is badge/booking-derived — sensor occupancy is unavailable in "
+               "accredited space (ICD 705).")
+
+    st.markdown("**Binding space type per site** — the space that runs out first")
+    binding = load_rows(
+        "SELECT * FROM vw_space_collision WHERE is_binding = 1 "
+        "ORDER BY (quarters_to_wall IS NULL), quarters_to_wall, site_name")
+    warned = [b for b in binding if b["space_status"] in ("AT THE WALL NOW", "COLLISION WARNING")]
+    for b in warned:
+        when = b["breach_quarter"] or "now"
+        st.error(
+            f"**{b['site_name']}** — binding space type **{b['space_type'].upper()}**, "
+            f"{b['space_status']} (~{when}). Utilization {b['current_util_pct']}% of "
+            f"{b['capacity']} {b['unit_label']}(s).")
+    if not warned:
+        st.success("No site is at its space wall this cycle.")
+    st.dataframe(load("SELECT site_name, space_type, capacity, capacity_status, current_util_pct, "
+                      "space_status, breach_quarter, supportable_units FROM vw_space_collision "
+                      "WHERE is_binding = 1 ORDER BY (quarters_to_wall IS NULL), quarters_to_wall"),
+                 use_container_width=True, hide_index=True)
+
+    st.markdown("**Time-to-seat** — where facilities, not hiring, is the bottleneck")
+    tts = load("SELECT site_name, archetype, open_reqs, time_to_fill_days, binding_space_type, "
+               "time_to_seat_days, bottleneck_flag FROM vw_time_to_seat "
+               "ORDER BY bottleneck_flag DESC, site_name")
+    flags = tts[tts["bottleneck_flag"] == "facilities_bottleneck"]
+    if not flags.empty:
+        for _, r in flags.iterrows():
+            st.warning(
+                f"**{r['site_name']} · {r['archetype']}** — FACILITIES IS THE BOTTLENECK: "
+                f"{r['binding_space_type']} takes **{r['time_to_seat_days']}d** to add vs. "
+                f"**{r['time_to_fill_days']}d** to hire.")
+    _bg = {"facilities_bottleneck": "background-color:#f8d7da", "ok": ""}
+    st.dataframe(tts.style.apply(lambda row: [_bg.get(row["bottleneck_flag"], "")] * len(row), axis=1),
+                 use_container_width=True, hide_index=True)
+
+    st.markdown("**Plan reconciliation** — authorized vs. pipeline-implied vs. space-supportable")
+    st.caption("Where the three plans disagree. A negative `delta_supportable_vs_pipeline` means "
+               "the space cannot hold the hiring plan.")
+    st.dataframe(load("SELECT * FROM vw_plan_reconciliation ORDER BY site_name"),
+                 use_container_width=True, hide_index=True)
 
 # === Tab: Actions =============================================================
 with tab_actions:

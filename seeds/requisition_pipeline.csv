@@ -1,0 +1,7 @@
+site_id,archetype_id,quarter,open_reqs,avg_time_to_fill_days
+arsenal-campus,1,2026-Q3,300,45
+hq-flagship,3,2026-Q3,120,200
+seattle-hub,2,2026-Q3,150,75
+srm-complex,1,2026-Q3,40,60
+maritime-systems,2,2026-Q3,30,70
+long-beach,2,2026-Q3,60,80

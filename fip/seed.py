@@ -101,35 +101,44 @@ def seed_leases():
 #    (dedupe test); boston-maritime's first quarter uses MM/YYYY date drift ('12/2025');
 #    one acquired-site row uses a messy code ('Advanced Imaging').
 def seed_hris():
+    # Each headcount row now carries a worker ARCHETYPE (Phase 3). Archetype drives
+    # which SPACE TYPES the person consumes (via archetype_space_map). The mix is what
+    # makes desks rarely the binding constraint at industrial sites.
     rows = []
-    # arsenal ramps hard as Building 1 fills (engineering + production)
+    # arsenal ramps hard as Building 1 fills — production workers (workstation + parking,
+    # zero desks) -> parking is the space that binds, not desks.
     arsenal = {"Fury CCA": [2600, 2900, 3200, 3500], "Roadrunner": [1400, 1500, 1600, 1700]}
     for prog, vals in arsenal.items():
         for q, hc in zip(QUARTERS, vals):
-            rows.append(["arsenal-campus", q, prog, hc])
-    # seattle engineering hub: crammed past its 1,200 seats by the last quarter
+            rows.append(["arsenal-campus", q, prog, "production", hc])
+    # seattle engineering hub: an office site — engineers on desks, the one place the
+    # commercial-office playbook applies (desks bind).
     for q, hc in zip(QUARTERS, [1100, 1200, 1300, 1400]):
-        rows.append(["seattle-hub", q, "Lattice OS", hc])
+        rows.append(["seattle-hub", q, "Lattice OS", "engineer", hc])
     # the deliberate duplicate: conflicting 2026-Q1 Lattice OS number, correct value later
-    rows.append(["seattle-hub", "2026-Q1", "Lattice OS", 9999])   # bad dupe (will be superseded)
-    rows.append(["seattle-hub", "2026-Q1", "Lattice OS", 1200])   # canonical value, kept
+    rows.append(["seattle-hub", "2026-Q1", "Lattice OS", "engineer", 9999])   # bad dupe (superseded)
+    rows.append(["seattle-hub", "2026-Q1", "Lattice OS", "engineer", 1200])   # canonical value, kept
+    # long-beach: a small standup crew while the campus is built (planned capacity)
+    for q, hc in zip(QUARTERS, [40, 60, 80, 100]):
+        rows.append(["long-beach", q, "Standup", "engineer", hc])
 
     steady = {
-        "hq-flagship":      ("Lattice OS",    [1900, 1950, 2000, 2050]),
-        "srm-complex":      ("SRM Supply",    [260,  290,  320,  350]),
-        "maritime-systems": ("Ghost Shark",   [430,  450,  470,  490]),
-        "composites-uav":   ("ALTIUS Series", [470,  500,  530,  560]),
-        "space-domain":     ("Space Ops",     [140,  160,  180,  200]),
-        "boston-maritime":  ("Ghost Shark",   [170,  175,  180,  185]),   # under-utilized vs 350 seats
+        # site: (program, archetype, [headcount per quarter])
+        "hq-flagship":      ("Lattice OS",    "cleared",  [1900, 1950, 2000, 2050]),  # SCIF-seat bound
+        "srm-complex":      ("SRM Supply",    "production", [260,  290,  320,  350]),
+        "maritime-systems": ("Ghost Shark",   "engineer", [430,  450,  470,  490]),
+        "composites-uav":   ("ALTIUS Series", "engineer", [470,  500,  530,  560]),
+        "space-domain":     ("Space Ops",     "cleared",  [140,  160,  180,  200]),   # SCIF audit pending
+        "boston-maritime":  ("Ghost Shark",   "engineer", [170,  175,  180,  185]),   # under-utilized vs 350 seats
     }
-    for site, (prog, vals) in steady.items():
+    for site, (prog, arch, vals) in steady.items():
         for q, hc in zip(QUARTERS, vals):
             # boston-maritime's first quarter arrives as a MM/YYYY date ('12/2025' -> 2025-Q4)
             qlabel = "12/2025" if (site == "boston-maritime" and q == "2025-Q4") else q
-            rows.append([site, qlabel, prog, hc])
+            rows.append([site, qlabel, prog, arch, hc])
     # acquired site headcount arrives under a messy code (routes to advanced-imaging)
-    rows.append(["Advanced Imaging", "2026-Q3", "Sensor Integration", 95])
-    return _write("hris_export.csv", ["site_id", "quarter", "program", "headcount"], rows)
+    rows.append(["Advanced Imaging", "2026-Q3", "Sensor Integration", "engineer", 95])
+    return _write("hris_export.csv", ["site_id", "quarter", "program", "archetype", "headcount"], rows)
 
 
 # -- mrp_export.csv : production demand on TWO constraints — floor space and power.
@@ -277,10 +286,122 @@ def seed_actions():
                    "resolution_note", "created_at"], rows)
 
 
+# =============================================================================
+# PHASE 3 — OCCUPANCY & SEAT DEMAND (configuration as data)
+# =============================================================================
+# Everything below is DATA the views read — no archetype, space type, ratio, or
+# lead time is hardcoded anywhere in SQL or Python. The demo data is engineered to
+# exercise every code path across DIFFERENT KINDS of sites (industrial binds on
+# parking, mixed binds on SCIF, office binds on desk, one audit-pending, one
+# planned buildout), not to tell one flagship's story.
+
+def seed_archetypes():
+    rows = [
+        # archetype_id, name, description
+        [1, "production",  "Line/cell operators; no desk, need a workstation and a parking stall"],
+        [2, "engineer",    "Design/test engineers; desk-based, some bench and parking"],
+        [3, "cleared",     "Cleared staff working in accredited space; need a SCIF seat"],
+        [4, "field",       "Field/deployment staff; rarely on-site, mostly need parking when in"],
+        [5, "contractor",  "On-site contractors; a mix of workstation and desk"],
+        [6, "corporate",   "Corporate/G&A; desk-based"],
+    ]
+    return _write("archetypes.csv", ["archetype_id", "name", "description"], rows)
+
+
+def seed_space_types():
+    rows = [
+        # space_type_id, name, unit_label, lead_time_days, restricted_sensing
+        [1, "desk",          "seat",    30,  0],
+        [2, "bench",         "bench",   90,  0],
+        [3, "workstation",   "station", 120, 0],
+        [4, "parking_stall", "stall",   270, 0],
+        [5, "scif_seat",     "seat",    540, 1],   # accredited: sensor occupancy unavailable (ICD 705)
+    ]
+    return _write("space_types.csv",
+                  ["space_type_id", "name", "unit_label", "lead_time_days", "restricted_sensing"], rows)
+
+
+def seed_archetype_space_map():
+    # ratio = units of a space type consumed per worker of an archetype. DATA, not
+    # constants in a view. A missing pair means that archetype needs none of it.
+    rows = [
+        # archetype_id, space_type_id, ratio
+        [1, 3, 1.0],  [1, 4, 0.67],                 # production: 1 workstation, 0.67 parking, 0 desk
+        [2, 1, 1.0],  [2, 4, 0.5],  [2, 2, 0.25],   # engineer: 1 desk, 0.5 parking, 0.25 bench
+        [3, 5, 1.0],  [3, 1, 0.2],  [3, 4, 0.5],    # cleared: 1 SCIF seat, 0.2 desk, 0.5 parking
+        [4, 1, 0.1],  [4, 4, 0.8],                  # field: 0.1 desk, 0.8 parking
+        [5, 3, 0.5],  [5, 1, 0.5],  [5, 4, 0.5],    # contractor: 0.5 workstation, 0.5 desk, 0.5 parking
+        [6, 1, 1.0],  [6, 4, 0.4],                  # corporate: 1 desk, 0.4 parking
+    ]
+    return _write("archetype_space_map.csv", ["archetype_id", "space_type_id", "ratio"], rows)
+
+
+def seed_space_capacity():
+    # Per-site supply. Tuned so each KIND of site binds on a different space type:
+    #   arsenal (industrial)  -> parking_stall (production is parking-heavy)
+    #   hq (mixed)            -> scif_seat (cleared staff, ample floor/power)
+    #   seattle (office)      -> desk (the one place the commercial playbook applies)
+    #   space-domain          -> scif_seat audit_pending (NULL capacity -> data pending)
+    #   long-beach (buildout) -> planned capacity -> supportable headcount, not a breach
+    # capacity omitted (NULL) only for audit_pending rows.
+    rows = [
+        # site_id, space_type_id, capacity, capacity_status
+        # arsenal: parking tight (binds ~2026-Q4), workstation & desk ample
+        ["arsenal-campus", 3, 7000, "confirmed"],   # workstation
+        ["arsenal-campus", 4, 4300, "confirmed"],   # parking_stall  <- binds
+        ["arsenal-campus", 1, 2000, "confirmed"],   # desk (production needs 0)
+        # hq: SCIF tight (cleared capped), desk & parking ample
+        ["hq-flagship", 5, 2150, "confirmed"],      # scif_seat  <- binds
+        ["hq-flagship", 1, 3000, "confirmed"],      # desk
+        ["hq-flagship", 4, 2500, "confirmed"],      # parking
+        # seattle: desk tight, parking & bench ample
+        ["seattle-hub", 1, 1550, "confirmed"],      # desk  <- binds
+        ["seattle-hub", 4, 2000, "confirmed"],      # parking
+        ["seattle-hub", 2, 2000, "confirmed"],      # bench
+        # space-domain: SCIF accreditation audit in progress -> capacity NULL, pending
+        ["space-domain", 5, "", "audit_pending"],   # scif_seat capacity unknown
+        ["space-domain", 1, 500, "confirmed"],      # desk (ample)
+        ["space-domain", 4, 500, "confirmed"],      # parking (ample)
+        # long-beach: still under construction -> planned supply, not a real ceiling
+        ["long-beach", 1, 1200, "planned"],         # desk (planned)
+        ["long-beach", 3, 800,  "planned"],         # workstation (planned)
+        # other operational sites: ample confirmed supply (stable, for coverage)
+        ["srm-complex", 3, 1200, "confirmed"], ["srm-complex", 4, 1000, "confirmed"],
+        ["maritime-systems", 1, 1000, "confirmed"], ["maritime-systems", 4, 900, "confirmed"], ["maritime-systems", 2, 900, "confirmed"],
+        ["composites-uav", 1, 1500, "confirmed"], ["composites-uav", 4, 1200, "confirmed"],
+        ["boston-maritime", 1, 900, "confirmed"], ["boston-maritime", 4, 700, "confirmed"],
+        ["advanced-imaging", 1, 500, "confirmed"],
+    ]
+    return _write("space_capacity.csv",
+                  ["site_id", "space_type_id", "capacity", "capacity_status"], rows)
+
+
+def seed_requisition_pipeline():
+    # The LEADING indicator. open_reqs become future-quarter seat demand once filled.
+    # avg_time_to_fill_days is the PEOPLE side; compared against a space's lead time
+    # it reveals where facilities (not hiring) is the bottleneck:
+    #   arsenal production: fast to hire (45d) but parking takes 270d -> facilities bottleneck
+    #   hq cleared:         slow to hire (200d) and SCIF takes 540d   -> facilities bottleneck
+    #   seattle engineer:   hire in 75d, desks take 30d               -> NOT a bottleneck
+    rows = [
+        # site_id, archetype_id, quarter, open_reqs, avg_time_to_fill_days
+        ["arsenal-campus", 1, "2026-Q3", 300, 45],    # production
+        ["hq-flagship",    3, "2026-Q3", 120, 200],   # cleared
+        ["seattle-hub",    2, "2026-Q3", 150, 75],    # engineer
+        ["srm-complex",    1, "2026-Q3", 40,  60],
+        ["maritime-systems", 2, "2026-Q3", 30, 70],
+        ["long-beach",     2, "2026-Q3", 60,  80],     # standup hiring against planned space
+    ]
+    return _write("requisition_pipeline.csv",
+                  ["site_id", "archetype_id", "quarter", "open_reqs", "avg_time_to_fill_days"], rows)
+
+
 def main():
     paths = [
         seed_sites(), seed_leases(), seed_hris(), seed_mrp(),
         seed_programs(), seed_quality(), seed_acquired(), seed_actions(),
+        seed_archetypes(), seed_space_types(), seed_archetype_space_map(),
+        seed_space_capacity(), seed_requisition_pipeline(),
     ]
     print("Seeded source-system exports:")
     for p in paths:

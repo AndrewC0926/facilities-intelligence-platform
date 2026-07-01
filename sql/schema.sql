@@ -15,6 +15,11 @@
 
 PRAGMA foreign_keys = ON;
 
+DROP TABLE IF EXISTS requisition_pipeline;
+DROP TABLE IF EXISTS space_capacity;
+DROP TABLE IF EXISTS archetype_space_map;
+DROP TABLE IF EXISTS space_types;
+DROP TABLE IF EXISTS archetypes;
 DROP TABLE IF EXISTS actions;
 DROP TABLE IF EXISTS programs;
 DROP TABLE IF EXISTS quality_issues;
@@ -60,6 +65,7 @@ CREATE TABLE headcount_snapshots (
     site_id      TEXT NOT NULL REFERENCES sites(site_id),
     quarter      TEXT NOT NULL,               -- 'YYYY-Qn'
     program      TEXT NOT NULL,               -- 'Anvil' | 'Sentinel' | 'Forge' | ...
+    archetype    TEXT,                         -- worker archetype (FK-ish to archetypes.name); NULL = unclassified
     headcount    INTEGER NOT NULL
 );
 
@@ -133,4 +139,69 @@ CREATE TABLE programs (
     units_per_quarter_target  INTEGER,
     kw_per_unit               REAL,    -- electrical load one unit's line/cell draws, kW
     sqft_per_unit             REAL     -- floor space one unit's line/cell consumes
+);
+
+-- =============================================================================
+-- PHASE 3 — OCCUPANCY & SEAT-DEMAND LAYER (fully data-driven)
+-- =============================================================================
+-- The thesis: "headcount" is not one number, it is N demand curves. Worker
+-- archetypes consume different SPACE TYPES at different ratios, with different
+-- lead times. Everything here is CONFIGURATION AS DATA — archetypes, space types,
+-- ratios, lead times, capacities — so the model works for any facility (current
+-- or not-yet-built) with zero code changes. No archetype, space type, ratio, or
+-- lead time is ever hardcoded in a view or in Python.
+
+-- Worker archetypes. Seed six, but any set works.
+CREATE TABLE archetypes (
+    archetype_id  INTEGER PRIMARY KEY,
+    name          TEXT NOT NULL UNIQUE,   -- 'production' | 'engineer' | 'cleared' | ...
+    description   TEXT
+);
+
+-- Space types, with the lead time to add ONE unit (per-row data, so any org can
+-- tune them). restricted_sensing flags accredited space where sensor-based
+-- occupancy is unavailable (ICD 705) and the model must degrade to badge/booking.
+CREATE TABLE space_types (
+    space_type_id      INTEGER PRIMARY KEY,
+    name               TEXT NOT NULL UNIQUE,   -- 'desk' | 'bench' | 'workstation' | 'parking_stall' | 'scif_seat'
+    unit_label         TEXT,                   -- how one unit is counted ('seat', 'stall', ...)
+    lead_time_days     INTEGER,                -- days to provision one more unit of this space
+    restricted_sensing INTEGER NOT NULL DEFAULT 0  -- 1 = accredited, sensor occupancy unavailable (badge/booking only)
+);
+
+-- How much of each space type one worker of an archetype consumes. Ratios are
+-- DATA, never constants in a view. A missing (archetype, space_type) pair means
+-- that archetype needs none of that space.
+CREATE TABLE archetype_space_map (
+    archetype_id   INTEGER NOT NULL REFERENCES archetypes(archetype_id),
+    space_type_id  INTEGER NOT NULL REFERENCES space_types(space_type_id),
+    ratio          REAL NOT NULL,          -- units of space per worker (e.g. 0.67 parking stalls)
+    PRIMARY KEY (archetype_id, space_type_id)
+);
+
+-- Per-site supply of each space type. A site simply omits rows for space types it
+-- doesn't have. capacity_status distinguishes real supply from pending/planned:
+--   'confirmed'     -> a real ceiling, projected against normally
+--   'audit_pending' -> capacity unknown (e.g. SCIF accreditation in progress);
+--                      capacity is NULL and must report data-pending, never a breach
+--   'planned'       -> future supply not yet built; reports supportable headcount,
+--                      not a breach (same null-safe spirit as the power NULL handling)
+CREATE TABLE space_capacity (
+    site_id         TEXT NOT NULL REFERENCES sites(site_id),
+    space_type_id   INTEGER NOT NULL REFERENCES space_types(space_type_id),
+    capacity        INTEGER,                -- NULL when audit_pending
+    capacity_status TEXT NOT NULL DEFAULT 'confirmed',
+    PRIMARY KEY (site_id, space_type_id)
+);
+
+-- The LEADING indicator: open requisitions per site/archetype/quarter, and how
+-- long they take to fill. HRIS headcount is trailing; these open reqs become
+-- future-quarter seat demand once filled (fill quarter = req quarter + ceil(fill/quarter)).
+CREATE TABLE requisition_pipeline (
+    req_id                INTEGER PRIMARY KEY,
+    site_id               TEXT NOT NULL REFERENCES sites(site_id),
+    archetype_id          INTEGER NOT NULL REFERENCES archetypes(archetype_id),
+    quarter               TEXT NOT NULL,     -- 'YYYY-Qn' the reqs are open
+    open_reqs             INTEGER NOT NULL,
+    avg_time_to_fill_days INTEGER            -- people-side lead time (vs. space-side lead_time_days)
 );

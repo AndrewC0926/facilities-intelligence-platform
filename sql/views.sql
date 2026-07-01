@@ -609,3 +609,292 @@ SELECT
     END                                                                        AS stalled_flag
 FROM base
 ORDER BY completeness_pct, site_id;
+
+
+-- =============================================================================
+-- PHASE 3 — OCCUPANCY & SEAT-DEMAND LAYER  (fully data-driven, per space_type)
+-- =============================================================================
+-- "Headcount" is not one number — it is N demand curves, one per worker archetype,
+-- each consuming different SPACE TYPES at ratios that live in archetype_space_map.
+-- These views read that configuration as DATA: no archetype, space type, ratio, or
+-- lead time is hardcoded here. A site added tomorrow (any subset of space types)
+-- flows through unchanged.
+--
+-- CLASSIFIED MODE (ICD 705): for space types flagged restricted_sensing = 1 (e.g.
+-- scif_seat), sensor-based occupancy is NOT available in accredited space. By design
+-- the model degrades to headcount + badge/booking-style counts only — every number
+-- below for restricted space comes from headcount and the requisition pipeline, never
+-- from a live occupancy sensor.
+
+
+-- -----------------------------------------------------------------------------
+-- vw_space_demand
+-- -----------------------------------------------------------------------------
+-- BUSINESS QUESTION : "How many units of each SPACE TYPE does each site demand, by
+--                      quarter, once you account for who actually works there (by
+--                      archetype) and who is being hired (the pipeline)?"
+-- WHO ASKS          : Space Planning, VP Facilities, workforce planning.
+-- REFRESH CADENCE   : Weekly (HRIS snapshot + live req pipeline).
+-- METHOD            : headcount x archetype_space_map = current-staff demand per
+--                      space type per observed quarter; pipeline open_reqs convert to
+--                      FUTURE-quarter demand at fill quarter = req_quarter +
+--                      ceil(time_to_fill / one_quarter). Current-staff demand is
+--                      carried forward into pipeline quarters, so the curve rises
+--                      with both the staffed trend and committed hiring.
+-- -----------------------------------------------------------------------------
+DROP VIEW IF EXISTS vw_space_demand;
+CREATE VIEW vw_space_demand AS
+WITH hc AS (          -- current-staff demand per (site, space_type, quarter)
+    SELECT
+        h.site_id,
+        m.space_type_id,
+        CAST(substr(h.quarter, 1, 4) AS INTEGER) * 4
+            + CAST(substr(h.quarter, 7, 1) AS INTEGER) - 1        AS q_index,
+        SUM(h.headcount * m.ratio)                                AS units
+    FROM headcount_snapshots h
+    JOIN archetypes a          ON a.name = h.archetype
+    JOIN archetype_space_map m ON m.archetype_id = a.archetype_id
+    GROUP BY h.site_id, m.space_type_id, q_index
+),
+pipe AS (             -- pipeline reqs -> demand at their FUTURE fill quarter
+    SELECT
+        p.site_id,
+        m.space_type_id,
+        (CAST(substr(p.quarter, 1, 4) AS INTEGER) * 4
+            + CAST(substr(p.quarter, 7, 1) AS INTEGER) - 1)
+            + CAST(p.avg_time_to_fill_days / 91.0 + 0.999999 AS INTEGER)  AS q_index,
+        SUM(p.open_reqs * m.ratio)                                AS units
+    FROM requisition_pipeline p
+    JOIN archetype_space_map m ON m.archetype_id = p.archetype_id
+    GROUP BY p.site_id, m.space_type_id, q_index
+),
+spine AS (            -- every quarter where demand is defined, per (site, space_type)
+    SELECT site_id, space_type_id, q_index FROM hc
+    UNION
+    SELECT site_id, space_type_id, q_index FROM pipe
+)
+SELECT
+    d.site_id,
+    d.space_type_id,
+    st.name          AS space_type,
+    st.unit_label,
+    st.restricted_sensing,
+    (d.q_index / 4) || '-Q' || (d.q_index % 4 + 1)  AS quarter,
+    d.q_index,
+    ROUND(d.demand_headcount, 2)                     AS demanded_from_headcount,
+    ROUND(d.demand_pipeline, 2)                      AS demanded_from_pipeline,
+    ROUND(d.demand_headcount + d.demand_pipeline, 2) AS demanded_units
+FROM (
+    SELECT
+        sp.site_id,
+        sp.space_type_id,
+        sp.q_index,
+        -- current-staff demand carried forward to future quarters (latest known <= q)
+        COALESCE((SELECT hc2.units FROM hc hc2
+                   WHERE hc2.site_id = sp.site_id AND hc2.space_type_id = sp.space_type_id
+                     AND hc2.q_index <= sp.q_index
+                   ORDER BY hc2.q_index DESC LIMIT 1), 0)          AS demand_headcount,
+        -- pipeline reqs cumulatively filled by this quarter
+        COALESCE((SELECT SUM(pp.units) FROM pipe pp
+                   WHERE pp.site_id = sp.site_id AND pp.space_type_id = sp.space_type_id
+                     AND pp.q_index <= sp.q_index), 0)             AS demand_pipeline
+    FROM spine sp
+) d
+JOIN space_types st ON st.space_type_id = d.space_type_id;
+
+
+-- -----------------------------------------------------------------------------
+-- vw_space_collision   ★ per-space-type collision, reports each site's binding one ★
+-- -----------------------------------------------------------------------------
+-- BUSINESS QUESTION : "For each site, which SPACE TYPE runs out first, and when?
+--                      Desks are rarely the answer at industrial sites."
+-- WHO ASKS          : VP Facilities, Space Planning, COO.
+-- REFRESH CADENCE   : Weekly.
+-- METHOD            : The SAME projection as vw_capacity_collision (linear growth,
+--                      85% wall, dated breach quarter) applied per (site, space_type)
+--                      over vw_space_demand. capacity_status governs null-safety:
+--                      'audit_pending'/NULL -> data pending (never a false breach);
+--                      'planned' -> reports supportable units, not a breach;
+--                      'confirmed' -> projected normally. is_binding = 1 marks the
+--                      space type that hits its wall first at each site. Works for a
+--                      site with one space type or ten, identically.
+-- -----------------------------------------------------------------------------
+DROP VIEW IF EXISTS vw_space_collision;
+CREATE VIEW vw_space_collision AS
+WITH bounds AS (
+    SELECT site_id, space_type_id, MIN(q_index) AS first_q, MAX(q_index) AS last_q
+    FROM vw_space_demand
+    GROUP BY site_id, space_type_id
+),
+trend AS (
+    SELECT
+        b.site_id, b.space_type_id, b.last_q,
+        f.demanded_units AS first_demand,
+        l.demanded_units AS last_demand,
+        CASE WHEN b.last_q = b.first_q THEN 0
+             ELSE (l.demanded_units - f.demanded_units) * 1.0 / (b.last_q - b.first_q)
+        END AS growth_per_q
+    FROM bounds b
+    JOIN vw_space_demand f ON f.site_id = b.site_id AND f.space_type_id = b.space_type_id AND f.q_index = b.first_q
+    JOIN vw_space_demand l ON l.site_id = b.site_id AND l.space_type_id = b.space_type_id AND l.q_index = b.last_q
+),
+proj AS (
+    SELECT
+        t.site_id, s.site_name,
+        t.space_type_id, st.name AS space_type, st.unit_label,
+        st.lead_time_days, st.restricted_sensing,
+        cap.capacity, cap.capacity_status,
+        (t.last_q / 4) || '-Q' || (t.last_q % 4 + 1)   AS latest_quarter,
+        ROUND(t.last_demand, 1)                         AS latest_demanded_units,
+        ROUND(t.growth_per_q, 2)                        AS growth_per_quarter,
+        CASE WHEN cap.capacity IS NULL OR cap.capacity = 0 OR cap.capacity_status <> 'confirmed' THEN NULL
+             ELSE ROUND(100.0 * t.last_demand / cap.capacity, 1) END           AS current_util_pct,
+        CASE WHEN cap.capacity IS NULL OR cap.capacity = 0 OR cap.capacity_status <> 'confirmed' THEN NULL
+             ELSE ROUND(100.0 * (t.last_demand + 2 * t.growth_per_q) / cap.capacity, 1) END AS projected_util_2q_pct,
+        CASE
+            WHEN cap.capacity IS NULL OR cap.capacity = 0 OR cap.capacity_status <> 'confirmed' THEN NULL
+            WHEN t.growth_per_q <= 0 THEN NULL
+            WHEN t.last_demand >= 0.85 * cap.capacity THEN 0
+            ELSE CAST((0.85 * cap.capacity - t.last_demand) / t.growth_per_q + 0.999999 AS INTEGER)
+        END                                             AS quarters_to_wall,
+        CASE
+            WHEN cap.capacity IS NULL OR cap.capacity = 0 OR cap.capacity_status <> 'confirmed' OR t.growth_per_q <= 0 THEN NULL
+            ELSE
+                CAST((t.last_q +
+                      CASE WHEN t.last_demand >= 0.85 * cap.capacity THEN 0
+                           ELSE CAST((0.85 * cap.capacity - t.last_demand) / t.growth_per_q + 0.999999 AS INTEGER)
+                      END) / 4 AS INTEGER)
+                || '-Q' ||
+                CAST((t.last_q +
+                      CASE WHEN t.last_demand >= 0.85 * cap.capacity THEN 0
+                           ELSE CAST((0.85 * cap.capacity - t.last_demand) / t.growth_per_q + 0.999999 AS INTEGER)
+                      END) % 4 + 1 AS INTEGER)
+        END                                             AS breach_quarter,
+        CASE
+            WHEN cap.capacity IS NULL OR cap.capacity_status = 'audit_pending' THEN 'data pending — audit'
+            WHEN cap.capacity_status = 'planned'                               THEN 'planned supply'
+            WHEN cap.capacity = 0                                              THEN 'data pending — audit'
+            WHEN t.growth_per_q <= 0                                           THEN 'stable'
+            WHEN t.last_demand >= 0.85 * cap.capacity                          THEN 'AT THE WALL NOW'
+            WHEN (0.85 * cap.capacity - t.last_demand) / t.growth_per_q <= 2   THEN 'COLLISION WARNING'
+            WHEN (0.85 * cap.capacity - t.last_demand) / t.growth_per_q <= 4   THEN 'watch'
+            ELSE 'ok'
+        END                                             AS space_status,
+        -- supportable units at the 85% planning wall (defined for confirmed + planned)
+        CASE WHEN cap.capacity IS NULL OR cap.capacity = 0 OR cap.capacity_status = 'audit_pending' THEN NULL
+             ELSE ROUND(0.85 * cap.capacity, 0) END     AS supportable_units
+    FROM trend t
+    JOIN sites s        ON s.site_id = t.site_id
+    JOIN space_types st ON st.space_type_id = t.space_type_id
+    JOIN space_capacity cap ON cap.site_id = t.site_id AND cap.space_type_id = t.space_type_id
+)
+SELECT
+    proj.*,
+    CASE WHEN quarters_to_wall IS NOT NULL
+              AND ROW_NUMBER() OVER (PARTITION BY site_id
+                    ORDER BY (quarters_to_wall IS NULL), quarters_to_wall, space_type_id) = 1
+         THEN 1 ELSE 0 END                              AS is_binding
+FROM proj;
+
+
+-- -----------------------------------------------------------------------------
+-- vw_time_to_seat   ★ is facilities, not hiring, the bottleneck? ★
+-- -----------------------------------------------------------------------------
+-- BUSINESS QUESTION : "For each site and archetype, does it take LONGER to build the
+--                      space than to hire the person? If so, facilities — not
+--                      recruiting — is what caps growth."
+-- WHO ASKS          : VP Facilities, Talent, COO.
+-- REFRESH CADENCE   : Weekly.
+-- METHOD            : Compare the people-side lead time (avg_time_to_fill_days, from
+--                      the pipeline) against the space-side lead time (lead_time_days)
+--                      of the site's BINDING space type — the space that actually
+--                      gates seats. If the archetype consumes that binding space and
+--                      space_lead > fill_time, flag 'facilities_bottleneck'. Ample
+--                      space never gates hiring, even if slow to build.
+-- -----------------------------------------------------------------------------
+DROP VIEW IF EXISTS vw_time_to_seat;
+CREATE VIEW vw_time_to_seat AS
+WITH latest_pipe AS (
+    SELECT
+        p.site_id, p.archetype_id, p.avg_time_to_fill_days, p.open_reqs, p.quarter,
+        ROW_NUMBER() OVER (PARTITION BY p.site_id, p.archetype_id ORDER BY p.quarter DESC) AS rn
+    FROM requisition_pipeline p
+),
+binding AS (
+    SELECT site_id, space_type_id, space_type, lead_time_days
+    FROM vw_space_collision WHERE is_binding = 1
+)
+SELECT
+    lp.site_id,
+    s.site_name,
+    a.name                                              AS archetype,
+    lp.open_reqs,
+    lp.avg_time_to_fill_days                            AS time_to_fill_days,
+    b.space_type                                        AS binding_space_type,
+    b.lead_time_days                                    AS time_to_seat_days,
+    CASE
+        WHEN b.space_type_id IS NOT NULL
+         AND EXISTS (SELECT 1 FROM archetype_space_map m
+                      WHERE m.archetype_id = lp.archetype_id
+                        AND m.space_type_id = b.space_type_id AND m.ratio > 0)
+         AND b.lead_time_days > lp.avg_time_to_fill_days
+        THEN 'facilities_bottleneck'
+        ELSE 'ok'
+    END                                                 AS bottleneck_flag
+FROM latest_pipe lp
+JOIN archetypes a ON a.archetype_id = lp.archetype_id
+JOIN sites s      ON s.site_id = lp.site_id
+LEFT JOIN binding b ON b.site_id = lp.site_id
+WHERE lp.rn = 1;
+
+
+-- -----------------------------------------------------------------------------
+-- vw_plan_reconciliation
+-- -----------------------------------------------------------------------------
+-- BUSINESS QUESTION : "Three plans disagree — authorized headcount (HRIS), what the
+--                      hiring pipeline implies, and what the SPACE can actually
+--                      support. Where, and by how much?"
+-- WHO ASKS          : COO, VP Facilities, Finance, workforce planning.
+-- REFRESH CADENCE   : Weekly.
+-- METHOD            : authorized = latest HRIS total; pipeline_implied = authorized +
+--                      open reqs; space_supportable = authorized scaled by the binding
+--                      space's headroom to its 85% wall (0.85*capacity / current
+--                      demand). Delta columns expose each disagreement. NULL binding
+--                      (all space ample, or audit-pending) -> supportable unknown.
+-- -----------------------------------------------------------------------------
+DROP VIEW IF EXISTS vw_plan_reconciliation;
+CREATE VIEW vw_plan_reconciliation AS
+WITH auth AS (
+    SELECT site_id, SUM(headcount) AS authorized_headcount
+    FROM headcount_snapshots
+    WHERE quarter = (SELECT MAX(quarter) FROM headcount_snapshots h2 WHERE h2.site_id = headcount_snapshots.site_id)
+    GROUP BY site_id
+),
+pipe AS (
+    SELECT site_id, SUM(open_reqs) AS open_reqs
+    FROM requisition_pipeline
+    WHERE quarter = (SELECT MAX(quarter) FROM requisition_pipeline r2 WHERE r2.site_id = requisition_pipeline.site_id)
+    GROUP BY site_id
+),
+binding AS (
+    SELECT site_id, space_type, capacity, latest_demanded_units
+    FROM vw_space_collision WHERE is_binding = 1
+)
+SELECT
+    a.site_id,
+    s.site_name,
+    b.space_type                                        AS binding_space_type,
+    a.authorized_headcount,
+    a.authorized_headcount + COALESCE(p.open_reqs, 0)   AS pipeline_implied_headcount,
+    CASE WHEN b.latest_demanded_units IS NULL OR b.latest_demanded_units = 0 THEN NULL
+         ELSE ROUND(a.authorized_headcount * (0.85 * b.capacity) / b.latest_demanded_units, 0)
+    END                                                 AS space_supportable_headcount,
+    COALESCE(p.open_reqs, 0)                            AS delta_pipeline_vs_authorized,
+    CASE WHEN b.latest_demanded_units IS NULL OR b.latest_demanded_units = 0 THEN NULL
+         ELSE ROUND(a.authorized_headcount * (0.85 * b.capacity) / b.latest_demanded_units, 0)
+              - (a.authorized_headcount + COALESCE(p.open_reqs, 0))
+    END                                                 AS delta_supportable_vs_pipeline
+FROM auth a
+JOIN sites s ON s.site_id = a.site_id
+LEFT JOIN pipe p    ON p.site_id = a.site_id
+LEFT JOIN binding b ON b.site_id = a.site_id;
