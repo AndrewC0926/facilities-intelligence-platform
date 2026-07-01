@@ -175,7 +175,7 @@ def _quarantine(conn, report, source, raw_row, reason):
 
 def load_headcount(conn, known, report):
     rows = _read_csv("hris_export.csv")
-    seen = {}   # (site, quarter, program) -> [values in file order]
+    seen = {}   # (site, quarter, program) -> [(headcount, archetype) in file order]
     for r in rows:
         site = canonicalize_code(r["site_id"], known)
         if site is None:
@@ -183,19 +183,19 @@ def load_headcount(conn, known, report):
                         f"unknown site code '{r['site_id']}'")
             continue
         key = (site, to_quarter(r["quarter"]), r["program"])
-        seen.setdefault(key, []).append(int(r["headcount"]))
+        seen.setdefault(key, []).append((int(r["headcount"]), r.get("archetype") or None))
     # de-dupe: keep the last (most recently received / resolved) value per key
     resolved = {}
     for key, vals in seen.items():
         resolved[key] = vals[-1]
-        dropped = [v for v in vals[:-1] if v != vals[-1]]
+        dropped = [v[0] for v in vals[:-1] if v[0] != vals[-1][0]]
         if dropped:
             report["dedupes"].append(
-                f"headcount {key}: kept {vals[-1]} (dropped conflicting: {dropped})")
-    for i, ((site, quarter, prog), hc) in enumerate(resolved.items(), start=1):
+                f"headcount {key}: kept {vals[-1][0]} (dropped conflicting: {dropped})")
+    for i, ((site, quarter, prog), (hc, arch)) in enumerate(resolved.items(), start=1):
         conn.execute(
-            "INSERT INTO headcount_snapshots VALUES (?,?,?,?,?)",
-            (i, site, quarter, prog, hc))
+            "INSERT INTO headcount_snapshots VALUES (?,?,?,?,?,?)",
+            (i, site, quarter, prog, arch, hc))
 
 
 def load_demand(conn, known, report):
@@ -255,6 +255,35 @@ def load_programs(conn):
              float(r["sqft_per_unit"]) if r["sqft_per_unit"] else None))
 
 
+def load_occupancy(conn, known):
+    """Load the Phase 3 occupancy configuration + facts. All of it is data:
+    archetypes, space types, ratios, capacities, and the req pipeline."""
+    for r in _read_csv("archetypes.csv"):
+        conn.execute("INSERT INTO archetypes VALUES (?,?,?)",
+                     (int(r["archetype_id"]), r["name"], r["description"] or None))
+    for r in _read_csv("space_types.csv"):
+        conn.execute("INSERT INTO space_types VALUES (?,?,?,?,?)",
+                     (int(r["space_type_id"]), r["name"], r["unit_label"] or None,
+                      parse_int(r["lead_time_days"]), int(r["restricted_sensing"])))
+    for r in _read_csv("archetype_space_map.csv"):
+        conn.execute("INSERT INTO archetype_space_map VALUES (?,?,?)",
+                     (int(r["archetype_id"]), int(r["space_type_id"]), float(r["ratio"])))
+    for r in _read_csv("space_capacity.csv"):
+        site = canonicalize_code(r["site_id"], known)
+        if site is None:
+            continue
+        conn.execute("INSERT INTO space_capacity VALUES (?,?,?,?)",
+                     (site, int(r["space_type_id"]), parse_int(r["capacity"]),
+                      r["capacity_status"] or "confirmed"))
+    for i, r in enumerate(_read_csv("requisition_pipeline.csv"), start=1):
+        site = canonicalize_code(r["site_id"], known)
+        if site is None:
+            continue
+        conn.execute("INSERT INTO requisition_pipeline VALUES (?,?,?,?,?,?)",
+                     (i, site, int(r["archetype_id"]), to_quarter(r["quarter"]),
+                      int(r["open_reqs"]), parse_int(r["avg_time_to_fill_days"])))
+
+
 def load_all(conn):
     """Run the full ingest into a freshly-schema'd connection. Returns a report dict."""
     report = {"actions": [], "conflicts": [], "exceptions": [],
@@ -267,6 +296,7 @@ def load_all(conn):
     load_quality(conn, known, report)
     load_actions(conn, known)
     load_programs(conn)
+    load_occupancy(conn, known)
     conn.commit()
     return report
 

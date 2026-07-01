@@ -25,6 +25,10 @@ PUBLISHED_VIEWS = [
     "vw_site_health",
     "vw_program_facility_risk",
     "vw_integration_pipeline",
+    "vw_space_demand",
+    "vw_space_collision",
+    "vw_time_to_seat",
+    "vw_plan_reconciliation",
 ]
 
 

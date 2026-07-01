@@ -1,0 +1,7 @@
+archetype_id,name,description
+1,production,"Line/cell operators; no desk, need a workstation and a parking stall"
+2,engineer,"Design/test engineers; desk-based, some bench and parking"
+3,cleared,Cleared staff working in accredited space; need a SCIF seat
+4,field,"Field/deployment staff; rarely on-site, mostly need parking when in"
+5,contractor,On-site contractors; a mix of workstation and desk
+6,corporate,Corporate/G&A; desk-based

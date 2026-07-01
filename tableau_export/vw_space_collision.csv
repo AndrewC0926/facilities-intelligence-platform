@@ -1,0 +1,23 @@
+site_id,site_name,space_type_id,space_type,unit_label,lead_time_days,restricted_sensing,capacity,capacity_status,latest_quarter,latest_demanded_units,growth_per_quarter,current_util_pct,projected_util_2q_pct,quarters_to_wall,breach_quarter,space_status,supportable_units,is_binding
+advanced-imaging,Advanced Imaging Facility,1,desk,seat,30,0,500,confirmed,2026-Q3,95.0,0.0,19.0,19.0,,,stable,425.0,0
+arsenal-campus,Arsenal Campus,4,parking_stall,stall,270,0,4300,confirmed,2026-Q4,3685.0,251.25,85.7,97.4,0,2026-Q4,AT THE WALL NOW,3655.0,1
+arsenal-campus,Arsenal Campus,3,workstation,station,120,0,7000,confirmed,2026-Q4,5500.0,375.0,78.6,89.3,2,2027-Q2,COLLISION WARNING,5950.0,0
+boston-maritime,Boston Maritime Engineering,1,desk,seat,30,0,900,confirmed,2026-Q3,185.0,5.0,20.6,21.7,116,2055-Q3,ok,765.0,1
+boston-maritime,Boston Maritime Engineering,4,parking_stall,stall,270,0,700,confirmed,2026-Q3,92.5,2.5,13.2,13.9,201,2076-Q4,ok,595.0,0
+composites-uav,Composites & UAV Integration,1,desk,seat,30,0,1500,confirmed,2026-Q3,560.0,30.0,37.3,41.3,24,2032-Q3,ok,1275.0,1
+composites-uav,Composites & UAV Integration,4,parking_stall,stall,270,0,1200,confirmed,2026-Q3,280.0,15.0,23.3,25.8,50,2039-Q1,ok,1020.0,0
+hq-flagship,HQ & Flagship Factory,5,scif_seat,seat,540,1,2150,confirmed,2027-Q2,2170.0,45.0,100.9,105.1,0,2027-Q2,AT THE WALL NOW,1828.0,1
+hq-flagship,HQ & Flagship Factory,4,parking_stall,stall,270,0,2500,confirmed,2027-Q2,1085.0,22.5,43.4,45.2,47,2039-Q1,ok,2125.0,0
+hq-flagship,HQ & Flagship Factory,1,desk,seat,30,0,3000,confirmed,2027-Q2,434.0,9.0,14.5,15.1,236,2086-Q2,ok,2550.0,0
+long-beach,Long Beach Campus,1,desk,seat,30,0,1200,planned,2026-Q4,160.0,30.0,,,,,planned supply,1020.0,0
+maritime-systems,Maritime Systems Factory,1,desk,seat,30,0,1000,confirmed,2026-Q4,520.0,22.5,52.0,56.5,15,2030-Q3,ok,850.0,1
+maritime-systems,Maritime Systems Factory,4,parking_stall,stall,270,0,900,confirmed,2026-Q4,260.0,11.25,28.9,31.4,45,2038-Q1,ok,765.0,0
+maritime-systems,Maritime Systems Factory,2,bench,bench,90,0,900,confirmed,2026-Q4,130.0,5.63,14.4,15.7,113,2055-Q1,ok,765.0,0
+seattle-hub,Seattle Engineering Hub,1,desk,seat,30,0,1550,confirmed,2026-Q4,1550.0,112.5,100.0,114.5,0,2026-Q4,AT THE WALL NOW,1318.0,1
+seattle-hub,Seattle Engineering Hub,4,parking_stall,stall,270,0,2000,confirmed,2026-Q4,775.0,56.25,38.8,44.4,17,2031-Q1,ok,1700.0,0
+seattle-hub,Seattle Engineering Hub,2,bench,bench,90,0,2000,confirmed,2026-Q4,387.5,28.13,19.4,22.2,47,2038-Q3,ok,1700.0,0
+space-domain,Space Domain Campus,4,parking_stall,stall,270,0,500,confirmed,2026-Q3,100.0,10.0,20.0,24.0,33,2034-Q4,ok,425.0,1
+space-domain,Space Domain Campus,1,desk,seat,30,0,500,confirmed,2026-Q3,40.0,4.0,8.0,9.6,97,2050-Q4,ok,425.0,0
+space-domain,Space Domain Campus,5,scif_seat,seat,540,1,,audit_pending,2026-Q3,200.0,20.0,,,,,data pending — audit,,0
+srm-complex,Solid Rocket Motor Complex,3,workstation,station,120,0,1200,confirmed,2026-Q4,390.0,32.5,32.5,37.9,20,2031-Q4,ok,1020.0,1
+srm-complex,Solid Rocket Motor Complex,4,parking_stall,stall,270,0,1000,confirmed,2026-Q4,261.3,21.78,26.1,30.5,28,2033-Q4,ok,850.0,0

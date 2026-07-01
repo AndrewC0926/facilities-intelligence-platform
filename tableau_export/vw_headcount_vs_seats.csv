@@ -16,6 +16,10 @@ hq-flagship,HQ & Flagship Factory,West,2025-Q4,2500,1900,76.0,healthy
 hq-flagship,HQ & Flagship Factory,West,2026-Q1,2500,1950,78.0,healthy
 hq-flagship,HQ & Flagship Factory,West,2026-Q2,2500,2000,80.0,healthy
 hq-flagship,HQ & Flagship Factory,West,2026-Q3,2500,2050,82.0,healthy
+long-beach,Long Beach Campus,West,2025-Q4,,40,,unknown
+long-beach,Long Beach Campus,West,2026-Q1,,60,,unknown
+long-beach,Long Beach Campus,West,2026-Q2,,80,,unknown
+long-beach,Long Beach Campus,West,2026-Q3,,100,,unknown
 maritime-systems,Maritime Systems Factory,Northeast,2025-Q4,600,430,71.7,healthy
 maritime-systems,Maritime Systems Factory,Northeast,2026-Q1,600,450,75.0,healthy
 maritime-systems,Maritime Systems Factory,Northeast,2026-Q2,600,470,78.3,healthy

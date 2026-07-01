@@ -55,7 +55,7 @@ and recommends shifting overflow to HQ & Flagship Factory (same region, ample sl
 ```
 1. SOURCES   simulated exports → seeds/*.csv      (ERP/CMMS · MRP · HRIS · acquired-site dump)
 2. INGEST    fip/etl.py        → cleans & reconciles dirty data into one canonical model
-3. STORE     sql/schema.sql    → 7 normalized tables in SQLite (fip.db)
+3. STORE     sql/schema.sql    → 13 normalized tables in SQLite (fip.db)
 4. SEMANTIC  sql/views.sql     → documented SQL views = the business logic (THE PRODUCT)
 5. DELIVERY  app/dashboard.py  → reads the views (so does Tableau) · tableau_export/*.csv
 ```
@@ -76,10 +76,10 @@ make demo          # seed → build → reconcile → export → launch the dash
 ```
 
 `make demo` builds everything and serves the dashboard at `http://localhost:8501`.
-The dashboard is organized into tabs — Capacity & Scenario, Programs, Actions, Lease
-Cliff, Site Health, Reconciliation, Quality & Cost, and a 30-second issue-intake
-form. It also self-bootstraps: point it at an empty checkout and it builds its own
-database on first launch.
+The dashboard is organized into tabs — Capacity & Scenario, Programs, Occupancy &
+Seats, Actions, Lease Cliff, Site Health, Reconciliation, Quality & Cost, and a
+30-second issue-intake form. It also self-bootstraps: point it at an empty checkout
+and it builds its own database on first launch.
 
 Prefer the pieces individually:
 
@@ -87,7 +87,7 @@ Prefer the pieces individually:
 make pipeline      # build everything, no dashboard (writes the DB, the reconciliation
                    # report, and one clean CSV per view in tableau_export/)
 make dashboard     # serve the dashboard against an existing build
-make test          # run the full test suite (55 tests)
+make test          # run the full test suite (65 tests)
 ```
 
 And two things you can run straight from the terminal:
@@ -101,7 +101,7 @@ python -m fip.ask collision            # ask a one-off question against the live
 
 ## The semantic layer — what each view answers
 
-These eleven SQL views *are* the product. Each one carries a comment block stating the
+These fifteen SQL views *are* the product. Each one carries a comment block stating the
 business question, who asks it, and how often it refreshes.
 
 | View | The question it answers |
@@ -117,6 +117,10 @@ business question, who asks it, and how often it refreshes.
 | `vw_reconciliation_status` | How cleanly did the acquired site fold in, and how many items still need a human? |
 | `vw_program_facility_risk` ★ | When a building hits a wall, **which programs does it stop, and how far short of target?** |
 | `vw_integration_pipeline` | Which acquired/buildout sites are still being stood up, and how complete is their data? |
+| `vw_space_demand` | How many units of each space type does each site demand, by archetype + pipeline, by quarter? |
+| `vw_space_collision` ★ | Which **space type** runs out first at each site — parking, SCIF seats, benches, desks? |
+| `vw_time_to_seat` | Where does building the seat take longer than hiring the person (facilities is the bottleneck)? |
+| `vw_plan_reconciliation` | Where do authorized, pipeline-implied, and space-supportable headcount disagree? |
 
 ### Worked example — the question → the view → the decision
 
@@ -230,10 +234,43 @@ audit trail is always current.
 
 ---
 
-## Roadmap — Phase 3
+## Phase 3: Occupancy
 
-The platform today reasons over a **static plan**. The next phase makes it react to
-the business in real time and connects it to the money.
+"Headcount" is not one number — it is **N demand curves.** A production operator, a
+design engineer, a cleared analyst, a field tech, a contractor and a corporate hire
+consume completely different space: the operator needs a workstation and two-thirds
+of a parking stall but *zero* desks; the analyst needs an accredited SCIF seat that
+takes **540 days** to stand up; the engineer needs a desk that takes 30. When
+facilities plans desks off total headcount, it plans the wrong thing — at an
+industrial site the wall you hit first is **parking or SCIF seats, never desks.**
+The occupancy layer projects each space type on its own curve (the same 85%-wall,
+dated-breach math as the capacity detector), reports the **binding** space type per
+site, and compares the time to *build* a seat against the time to *hire* the person
+who fills it — flagging every place where facilities, not recruiting, is the real
+cap on growth. The hiring pipeline is the *leading* indicator; HRIS headcount is
+trailing.
+
+The entire layer is **configuration as data.** Archetypes, space types, the ratio of
+each space a worker consumes, provisioning lead times, per-site capacities, and the
+requisition pipeline all live in tables — nothing site-specific, and no ratio or
+lead time, is hardcoded in a view or in Python. A facility that does not exist yet
+flows through every view the moment its rows are seeded, with zero code changes; a
+site with one space type is handled identically to one with ten. It is null-safe by
+the same discipline as the rest of the platform: a SCIF whose accreditation audit is
+pending reports *data pending* rather than a false breach, and a building still under
+construction reports the headcount its *planned* capacity will support rather than a
+collision. And it respects the classified boundary by design — for accredited space
+(ICD 705) sensor-based occupancy is unavailable, so utilization degrades to headcount
+and badge/booking counts, flagged in the data (`restricted_sensing`) so downstream
+never assumes a sensor it cannot have.
+
+---
+
+## Roadmap
+
+The platform today reasons over a largely **static plan**. The next steps make it
+react to the business in real time and connect it to the money. (The Phase 3
+requisition pipeline is a first step toward the first bullet.)
 
 - **Upstream demand signals.** Replace the seeded MRP/HRIS snapshots with live feeds
   from the systems of record — program forecasts, the sales/booking pipeline, and
@@ -253,7 +290,7 @@ owned action, to a funded decision.
 
 ---
 
-## The data model (7 tables)
+## The data model (13 tables)
 
 The portfolio is **10 sites** — a flagship mega-factory (Arsenal Campus), a campus
 under construction (Long Beach), a rocket-motor complex, an undersea-systems
@@ -266,10 +303,15 @@ Shark, ALTIUS, Bolt, SRM Supply, Lattice OS).
 | `sites` | canonical registry | one row per facility — size, seats, **power capacity (kW)**, lifecycle status, integration & lease dates, provenance |
 | `programs` | program registry | each program → its primary/secondary site, current vs. target quarterly output, per-unit floor & power footprint |
 | `leases` | real-estate / finance | annual rent + opex → drives cost per square foot |
-| `headcount_snapshots` | **HRIS** | assigned headcount per site/program/quarter |
+| `headcount_snapshots` | **HRIS** | assigned headcount per site/program/quarter, tagged by worker **archetype** |
 | `production_demand` | **MRP** | per-quarter facility demand → demanded floor space + power (kW) |
 | `quality_issues` | **ERP/CMMS** + intake form | quality/safety/facility issues, severity, status |
 | `actions` | workflow layer | owned, dated tasks generated from insights (collision / reconciliation / quality) |
+| `archetypes` | occupancy config | worker archetypes (production, engineer, cleared, field, contractor, corporate — any set) |
+| `space_types` | occupancy config | space types + provisioning **lead times** + `restricted_sensing` (ICD 705) |
+| `archetype_space_map` | occupancy config | how much of each space type one worker of an archetype consumes (ratios as data) |
+| `space_capacity` | occupancy | per-site supply per space type, with `capacity_status` (confirmed / audit_pending / planned) |
+| `requisition_pipeline` | **ATS** (leading) | open reqs + time-to-fill per site/archetype/quarter — the leading indicator |
 
 See [`sql/schema.sql`](sql/schema.sql) for the full definitions, plus `etl_exceptions`,
 the quarantine table where un-reconcilable rows wait for a human.
@@ -285,5 +327,5 @@ fip/        seed.py etl.py reconcile.py          ← generate source data, clean
 app/        dashboard.py                          ← the Streamlit front end (presentation only)
 seeds/      *.csv   (the simulated source-system exports)
 tableau_export/  *.csv   (one clean extract per view — the Tableau handoff)
-tests/      55 tests across ingestion, every view, and all decision/workflow logic
+tests/      65 tests across ingestion, every view, and all decision/workflow/occupancy logic
 ```

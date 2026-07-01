@@ -1,0 +1,11 @@
+site_id,site_name,binding_space_type,authorized_headcount,pipeline_implied_headcount,space_supportable_headcount,delta_pipeline_vs_authorized,delta_supportable_vs_pipeline
+advanced-imaging,Advanced Imaging Facility,,95,95,,0,
+arsenal-campus,Arsenal Campus,parking_stall,5200,5500,5158.0,300,-342.0
+boston-maritime,Boston Maritime Engineering,desk,185,185,765.0,0,580.0
+composites-uav,Composites & UAV Integration,desk,560,560,1275.0,0,715.0
+hq-flagship,HQ & Flagship Factory,scif_seat,2050,2170,1726.0,120,-444.0
+long-beach,Long Beach Campus,,100,160,,60,
+maritime-systems,Maritime Systems Factory,desk,490,520,801.0,30,281.0
+seattle-hub,Seattle Engineering Hub,desk,1400,1550,1190.0,150,-360.0
+space-domain,Space Domain Campus,parking_stall,200,200,850.0,0,650.0
+srm-complex,Solid Rocket Motor Complex,workstation,350,390,915.0,40,525.0
