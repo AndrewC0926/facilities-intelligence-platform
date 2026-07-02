@@ -10,7 +10,7 @@ score its own forecasts over time (Phase 4, vw_forecast_accuracy).
 import datetime
 import os
 
-from fip import db, etl, reconcile, export, seed
+from fip import db, decide, etl, reconcile, export, seed
 
 
 def append_forecast_snapshot(conn, run_date=None):
@@ -43,6 +43,7 @@ def run():
     conn.commit()
 
     append_forecast_snapshot(conn)   # self-scoring: record this run's predictions
+    queued = decide.ensure_collision_decisions(conn)   # queue decisions for at-risk collisions
 
     recon_path = reconcile.write_report(conn, report)
     written = export.write_all(conn)
@@ -53,6 +54,7 @@ def run():
     print(f"  • reconciliation:  {os.path.relpath(recon_path)} "
           f"({len(report['conflicts']) + len(report['exceptions'])} exceptions)")
     print(f"  • tableau_export:  {len(written)} view extracts")
+    print(f"  • decisions queued: {queued} new (last-responsible-moment)")
     return report
 
 

@@ -1,0 +1,5 @@
+site_id,space_type_id,source,title,options_summary,owner,decide_by_date,decided_at,decision_note,created_at
+seattle-hub,1,collision,Seattle desk wall: expand floor or cap engineering hiring,expand floor / relocate a team / cap hiring,VP Facilities,2026-05-01,,,2026-04-01
+hq-flagship,5,accreditation,HQ SCIF accreditation: commit the build or defer cleared hiring,commit build / defer hiring / lease accredited space,Security Director,2026-07-20,,,2026-06-01
+long-beach,,incentive,Long Beach incentive: confirm the hiring ramp to hold the grant,accelerate hiring / renegotiate terms / accept clawback,Corp Dev,2027-03-01,,,2026-06-15
+arsenal-campus,4,collision,Arsenal parking wall: structured-deck expansion,build deck / shuttle + offsite / stagger shifts,VP Facilities,2026-03-01,2026-02-20,Approved structured-deck expansion; funded FY26,2026-01-10

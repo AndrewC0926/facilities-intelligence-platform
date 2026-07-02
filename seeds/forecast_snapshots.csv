@@ -5,3 +5,7 @@ snapshot_date,site_id,space_type_id,predicted_breach_quarter,predicted_util_pct
 2026-04-15,arsenal-campus,4,2026-Q4,83.0
 2026-04-15,hq-flagship,5,2027-Q2,100.0
 2026-04-15,seattle-hub,1,2026-Q4,100.0
+2026-01-15,srm-complex,4,2026-Q4,80.0
+2026-04-15,srm-complex,4,2027-Q3,82.0
+2026-01-15,boston-maritime,1,,70.0
+2026-04-15,boston-maritime,1,,92.0

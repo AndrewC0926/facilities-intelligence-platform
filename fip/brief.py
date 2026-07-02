@@ -113,6 +113,22 @@ def _scorecard_section(scorecard):
     return "\n".join(lines)
 
 
+def _decisions_section(decisions):
+    """Open decisions that are OVERDUE or CLOSING, with their decide-by dates.
+    Reads vw_decision_queue only; no site names are hardcoded."""
+    if not decisions:
+        return "- No decisions are overdue or closing this cycle."
+    lines = []
+    for d in decisions:
+        days = d["days_remaining"]
+        when = (f"OVERDUE by {abs(days)}d" if d["urgency"] == "OVERDUE"
+                else f"decide within {days}d")
+        lines.append(
+            f"- **{d['urgency']}** ({when}, by {d['decide_by_date']}) — {d['title']} "
+            f"[{d['source']}, owner: {d['owner'] or 'unassigned'}]")
+    return "\n".join(lines)
+
+
 def _space_section(space_binding, bottlenecks):
     """Top space bottleneck portfolio-wide + any facilities-is-the-bottleneck flags.
     Reads the views only — no site names or space types are hardcoded."""
@@ -162,6 +178,9 @@ def render(conn=None, today=None, multipliers=None):
             conn, "SELECT * FROM vw_time_to_seat WHERE bottleneck_flag = 'facilities_bottleneck' "
             "ORDER BY (time_to_seat_days - time_to_fill_days) DESC, site_name")
         scorecard = db.query(conn, "SELECT * FROM vw_kpi_scorecard")
+        decisions = db.query(
+            conn, "SELECT * FROM vw_decision_queue "
+            "WHERE urgency IN ('OVERDUE', 'CLOSING') ORDER BY decide_by_date")
     finally:
         if own:
             conn.close()
@@ -188,6 +207,10 @@ _Generated {today.isoformat()} from the live semantic views (`vw_kpi_scorecard`,
 ## KPI scorecard
 
 {_scorecard_section(scorecard)}
+
+## Decisions needed
+
+{_decisions_section(decisions)}
 
 ## Headline risk
 

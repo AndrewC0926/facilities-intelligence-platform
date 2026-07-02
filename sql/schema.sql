@@ -15,6 +15,7 @@
 
 PRAGMA foreign_keys = ON;
 
+DROP TABLE IF EXISTS decisions;
 DROP TABLE IF EXISTS onboarding_cohorts;
 DROP TABLE IF EXISTS accreditation_milestones;
 DROP TABLE IF EXISTS incentive_agreements;
@@ -272,4 +273,26 @@ CREATE TABLE onboarding_cohorts (
     equipment_ready INTEGER NOT NULL DEFAULT 0,
     badge_ready     INTEGER NOT NULL DEFAULT 0,
     parking_ready   INTEGER NOT NULL DEFAULT 0
+);
+
+-- =============================================================================
+-- PHASE 5 — DECISION LAYER
+-- =============================================================================
+-- The platform detects risks and prices them, but a human still has to notice a
+-- change, gather people, and decide. This table closes that loop: every material
+-- change or at-risk collision becomes a queued decision with a deadline derived
+-- from physics (the last responsible moment = breach date minus the fix's lead
+-- time). decided_at is NULL until the call is made.
+CREATE TABLE decisions (
+    decision_id      INTEGER PRIMARY KEY,
+    site_id          TEXT REFERENCES sites(site_id),
+    space_type_id    INTEGER REFERENCES space_types(space_type_id),  -- nullable (not all decisions are space-specific)
+    source           TEXT,   -- 'collision' | 'material_change' | 'incentive' | 'accreditation' | 'manual'
+    title            TEXT NOT NULL,
+    options_summary  TEXT,
+    owner            TEXT,
+    decide_by_date   TEXT,   -- ISO 'YYYY-MM-DD': the last responsible moment
+    decided_at       TEXT,   -- ISO date the decision was made (NULL = still open)
+    decision_note    TEXT,
+    created_at       TEXT    -- ISO date the decision was queued
 );
