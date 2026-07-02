@@ -2,7 +2,7 @@
 idempotent auto-queue, urgency bands, and the decision-latency KPI. Assert patterns."""
 import datetime
 
-from fip import db, decide, etl
+from fip import db, decide, etl, pipeline
 
 
 def _fresh(tmp_path, name="d.db"):
@@ -11,6 +11,28 @@ def _fresh(tmp_path, name="d.db"):
     etl.load_all(conn)
     db.apply_views(conn)
     return conn
+
+
+# --- 0. the app self-bootstrap stays on the curated two-snapshot state -----------
+
+def test_app_bootstrap_build_skips_snapshot_append(tmp_path):
+    conn = db.connect(str(tmp_path / "app.db"))
+    pipeline.build(conn, append_snapshot=False)          # the app's self-bootstrap path
+    dates = db.query(conn, "SELECT COUNT(DISTINCT snapshot_date) c FROM forecast_snapshots")[0]["c"]
+    assert dates == 2                                     # no live third snapshot appended
+    fa = db.query(conn, "SELECT value FROM vw_kpi_scorecard WHERE kpi_key='forecast_accuracy'")[0]
+    assert fa["value"] == 66.7                            # curated demo number holds
+    dirs = {r["direction"] for r in db.query(conn, "SELECT direction FROM vw_material_changes")}
+    assert {"worse", "better"} <= dirs                   # both a worse and a better row
+    conn.close()
+
+
+def test_cli_build_appends_snapshot(tmp_path):
+    conn = db.connect(str(tmp_path / "cli.db"))
+    pipeline.build(conn, append_snapshot=True)            # the CLI / make pipeline default
+    dates = db.query(conn, "SELECT COUNT(DISTINCT snapshot_date) c FROM forecast_snapshots")[0]["c"]
+    assert dates == 3                                     # two seeded + one live
+    conn.close()
 
 
 # --- 1. material changes: exactly the seeded deltas -----------------------------

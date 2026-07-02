@@ -45,13 +45,19 @@ st.caption("One source of truth across ERP · MRP · HRIS — every tile reads a
            "exactly as Tableau would.")
 
 if not os.path.exists(db.DB_PATH):
-    # Cloud-friendly bootstrap: on a fresh deploy there is no fip.db yet.
-    # Run the full pipeline (seed -> schema -> ETL+reconcile -> views -> exports)
-    # right here so the app works from a bare git clone with zero setup.
-    with st.spinner("First boot: building the database (seed -> ETL -> reconcile -> views)..."):
-        from fip import pipeline
-        pipeline.run()
-    st.toast("Pipeline complete. Database built from source exports.", icon="✅")
+    # Cloud-friendly bootstrap: on a fresh deploy there is no fip.db yet. Build the
+    # database right here so the app works from a bare git clone with zero setup.
+    # append_snapshot=False keeps the deployed demo on the curated two-snapshot seeded
+    # state, so vw_material_changes and vw_forecast_accuracy show the intended numbers
+    # (a live third snapshot would shift them). CLI `make pipeline` still appends.
+    with st.spinner("First boot: building the database (seed -> ETL -> views)..."):
+        from fip import pipeline, seed
+        if not os.path.exists(os.path.join(seed.SEED_DIR, "sites_master.csv")):
+            seed.main()
+        conn = db.connect()
+        pipeline.build(conn, append_snapshot=False)
+        conn.close()
+    st.toast("Database built from source exports (curated demo state).", icon="✅")
 
 # --- Scenario controls (sidebar) ----------------------------------------------
 # Per-site growth multiplier. All math lives in fip.scenario; the sidebar only
