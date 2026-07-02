@@ -21,9 +21,11 @@ def test_material_changes_reports_exactly_the_seeded_deltas(built_db):
     got = {(r["site_id"], r["what_changed"], r["direction"]) for r in rows}
     assert got == {
         ("arsenal-campus", "breach_quarter", "worse"),   # 2027-Q1 -> 2026-Q4 (pulled earlier)
-        ("srm-complex", "breach_quarter", "better"),      # 2026-Q4 -> 2027-Q3 (pushed later)
+        ("srm-complex", "breach_cleared", "better"),      # 2026-Q4 -> none (breach cleared)
         ("boston-maritime", "utilization_band", "worse"), # 70% -> 92% (crossed above the band)
     }
+    # both a worse and a better row are present
+    assert {r["direction"] for r in rows} >= {"worse", "better"}
     # sites whose forecast did not move are not reported
     assert not any(r["site_id"] in ("hq-flagship", "seattle-hub") for r in rows)
 

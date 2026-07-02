@@ -425,10 +425,12 @@ def seed_forecast_snapshots():
         ["2026-04-15", "arsenal-campus", 4, "2026-Q4", 83.0],   # revised earlier -> run 1 was 1 quarter off
         ["2026-04-15", "hq-flagship",    5, "2027-Q2", 100.0],  # same quarter -> run 1 was a hit
         ["2026-04-15", "seattle-hub",    1, "2026-Q4", 100.0],  # same quarter -> run 1 was a hit
-        # Phase 5 material-change fodder: a breach pushed LATER (better) and a
+        # Phase 5 material-change fodder: a breach that CLEARED (better) and a
         # utilization that crossed OUT of its corridor band (worse), between the two dates.
+        # Both have a NULL breach in the newer snapshot, so vw_forecast_accuracy does not
+        # score them (it needs a breach quarter on both sides) and its hit rate stays put.
         ["2026-01-15", "srm-complex",     4, "2026-Q4", 80.0],
-        ["2026-04-15", "srm-complex",     4, "2027-Q3", 82.0],   # breach later -> better
+        ["2026-04-15", "srm-complex",     4, "",        82.0],   # breach cleared -> better
         ["2026-01-15", "boston-maritime", 1, "",        70.0],   # in band (60-85)
         ["2026-04-15", "boston-maritime", 1, "",        92.0],   # above band -> corridor crossing (worse)
     ]
