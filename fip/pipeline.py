@@ -32,18 +32,32 @@ def append_forecast_snapshot(conn, run_date=None):
     return len(preds)
 
 
-def run():
-    # ensure the simulated source exports exist (idempotent)
-    if not os.path.exists(os.path.join(seed.SEED_DIR, "sites_master.csv")):
-        seed.main()
-    conn = db.connect()
+def build(conn, append_snapshot=True):
+    """Build the whole platform into `conn`: schema -> ETL + reconcile -> views, then
+    queue decisions, and (optionally) append this run's forecast snapshot.
+
+    append_snapshot defaults to True for CLI / `make pipeline` runs, where each run
+    should record its predictions so the platform can score itself over time. The
+    app's self-bootstrap passes append_snapshot=False so the deployed demo stays on
+    the curated two-snapshot seeded state (vw_material_changes and vw_forecast_accuracy
+    do not drift toward a live third snapshot). Returns the ETL report dict, with the
+    number of newly queued decisions stashed under 'decisions_queued'."""
     db.apply_schema(conn)
     report = etl.load_all(conn)
     db.apply_views(conn)
     conn.commit()
+    if append_snapshot:
+        append_forecast_snapshot(conn)   # self-scoring: record this run's predictions
+    report["decisions_queued"] = decide.ensure_collision_decisions(conn)
+    return report
 
-    append_forecast_snapshot(conn)   # self-scoring: record this run's predictions
-    queued = decide.ensure_collision_decisions(conn)   # queue decisions for at-risk collisions
+
+def run(append_snapshot=True):
+    # ensure the simulated source exports exist (idempotent)
+    if not os.path.exists(os.path.join(seed.SEED_DIR, "sites_master.csv")):
+        seed.main()
+    conn = db.connect()
+    report = build(conn, append_snapshot=append_snapshot)
 
     recon_path = reconcile.write_report(conn, report)
     written = export.write_all(conn)
@@ -54,7 +68,7 @@ def run():
     print(f"  • reconciliation:  {os.path.relpath(recon_path)} "
           f"({len(report['conflicts']) + len(report['exceptions'])} exceptions)")
     print(f"  • tableau_export:  {len(written)} view extracts")
-    print(f"  • decisions queued: {queued} new (last-responsible-moment)")
+    print(f"  • decisions queued: {report['decisions_queued']} new (last-responsible-moment)")
     return report
 
 
