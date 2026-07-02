@@ -1234,4 +1234,159 @@ SELECT * FROM (
              THEN 'AT RISK' ELSE 'ok' END,
         COUNT(*) || ' site(s) reconciled'
     FROM vw_plan_reconciliation
+
+    UNION ALL
+    -- 7. decision latency (Phase 5): median days created -> decided, plus overdue count.
+    --    Reads only the decisions table, so the six rows above are unaffected.
+    SELECT 7, 'decision_latency', 'Decision latency (median days to decide) + overdue',
+        COALESCE((SELECT AVG(dd) FROM (
+            SELECT CAST(julianday(decided_at) - julianday(created_at) AS INTEGER) AS dd
+            FROM decisions WHERE decided_at IS NOT NULL AND created_at IS NOT NULL
+            ORDER BY dd
+            LIMIT 2 - (SELECT COUNT(*) FROM decisions WHERE decided_at IS NOT NULL AND created_at IS NOT NULL) % 2
+            OFFSET (SELECT (COUNT(*) - 1) / 2 FROM decisions WHERE decided_at IS NOT NULL AND created_at IS NOT NULL)
+        )), 0),
+        'days', 'target: fast, 0 overdue',
+        CASE WHEN (SELECT COUNT(*) FROM decisions
+                    WHERE decided_at IS NULL AND decide_by_date IS NOT NULL
+                      AND julianday(decide_by_date) < julianday('now')) > 0
+             THEN 'AT RISK' ELSE 'ok' END,
+        (SELECT COUNT(*) FROM decisions
+          WHERE decided_at IS NULL AND decide_by_date IS NOT NULL
+            AND julianday(decide_by_date) < julianday('now')) || ' overdue decision(s)'
 ) ORDER BY sort_order;
+
+
+-- =============================================================================
+-- PHASE 5 — DECISION LAYER
+-- =============================================================================
+-- People are the middleware: someone has to notice a change, gather people, and
+-- decide before an option quietly expires. These views turn every material change
+-- and at-risk collision into a queued decision with a physics-derived deadline
+-- (the last responsible moment = breach date minus the fix's lead time).
+
+
+-- -----------------------------------------------------------------------------
+-- vw_material_changes
+-- -----------------------------------------------------------------------------
+-- BUSINESS QUESTION : "Since the last forecast, what materially changed per site and
+--                      space type, and did it get better or worse?"
+-- WHO ASKS          : COO, VP Facilities.
+-- REFRESH CADENCE   : Per pipeline run (each run appends a snapshot to diff against).
+-- METHOD            : Diff the two most recent snapshot_dates in forecast_snapshots.
+--                      Report a breach quarter that moved, a breach that appeared or
+--                      cleared, or a utilization that crossed its corridor band. With
+--                      fewer than two snapshot dates the view is simply empty.
+-- -----------------------------------------------------------------------------
+DROP VIEW IF EXISTS vw_material_changes;
+CREATE VIEW vw_material_changes AS
+WITH d2 AS (
+    SELECT DISTINCT snapshot_date FROM forecast_snapshots ORDER BY snapshot_date DESC LIMIT 2
+),
+bounds AS (SELECT MAX(snapshot_date) AS cur_date, MIN(snapshot_date) AS prev_date FROM d2),
+prev AS (SELECT fs.* FROM forecast_snapshots fs JOIN bounds b ON fs.snapshot_date = b.prev_date),
+cur  AS (SELECT fs.* FROM forecast_snapshots fs JOIN bounds b ON fs.snapshot_date = b.cur_date),
+paired AS (
+    SELECT
+        c.site_id, s.site_name, c.space_type_id, st.name AS space_type,
+        st.target_util_low AS lo, st.target_util_high AS hi,
+        p.predicted_breach_quarter AS prev_bq, c.predicted_breach_quarter AS cur_bq,
+        p.predicted_util_pct AS prev_util, c.predicted_util_pct AS cur_util,
+        CASE WHEN p.predicted_breach_quarter IS NULL THEN NULL
+             ELSE CAST(substr(p.predicted_breach_quarter,1,4) AS INTEGER)*4 + CAST(substr(p.predicted_breach_quarter,7,1) AS INTEGER) END AS prev_qi,
+        CASE WHEN c.predicted_breach_quarter IS NULL THEN NULL
+             ELSE CAST(substr(c.predicted_breach_quarter,1,4) AS INTEGER)*4 + CAST(substr(c.predicted_breach_quarter,7,1) AS INTEGER) END AS cur_qi
+    FROM cur c
+    JOIN prev p        ON p.site_id = c.site_id AND p.space_type_id = c.space_type_id
+    JOIN sites s       ON s.site_id = c.site_id
+    JOIN space_types st ON st.space_type_id = c.space_type_id
+    WHERE (SELECT COUNT(*) FROM d2) = 2      -- fewer than two dates -> no rows, never an error
+)
+SELECT site_id, site_name, space_type_id, space_type,
+       'breach_quarter' AS what_changed, prev_bq AS previous_value, cur_bq AS current_value,
+       CASE WHEN cur_qi < prev_qi THEN 'worse' ELSE 'better' END AS direction
+FROM paired WHERE prev_bq IS NOT NULL AND cur_bq IS NOT NULL AND prev_qi <> cur_qi
+UNION ALL
+SELECT site_id, site_name, space_type_id, space_type,
+       'breach_appeared', 'none', cur_bq, 'new'
+FROM paired WHERE prev_bq IS NULL AND cur_bq IS NOT NULL
+UNION ALL
+SELECT site_id, site_name, space_type_id, space_type,
+       'breach_cleared', prev_bq, 'none', 'better'
+FROM paired WHERE prev_bq IS NOT NULL AND cur_bq IS NULL
+UNION ALL
+SELECT site_id, site_name, space_type_id, space_type,
+       'utilization_band',
+       CAST(prev_util AS TEXT) || '%', CAST(cur_util AS TEXT) || '%',
+       CASE WHEN (cur_util BETWEEN lo AND hi) AND NOT (prev_util BETWEEN lo AND hi) THEN 'better' ELSE 'worse' END
+FROM paired
+WHERE prev_util IS NOT NULL AND cur_util IS NOT NULL
+  AND ((prev_util BETWEEN lo AND hi) <> (cur_util BETWEEN lo AND hi));
+
+
+-- -----------------------------------------------------------------------------
+-- vw_last_responsible_moment   ★ the deadline comes from physics ★
+-- -----------------------------------------------------------------------------
+-- BUSINESS QUESTION : "For each at-risk space, what is the LAST day we can still
+--                      decide and have the fix land before the wall?"
+-- WHO ASKS          : COO, VP Facilities, capital planning.
+-- REFRESH CADENCE   : Weekly.
+-- METHOD            : last responsible moment = the binding breach quarter's start
+--                      date minus the space type's provisioning lead_time_days. This
+--                      is what the decision queue uses, so the two agree by construction.
+-- -----------------------------------------------------------------------------
+DROP VIEW IF EXISTS vw_last_responsible_moment;
+CREATE VIEW vw_last_responsible_moment AS
+SELECT
+    sc.site_id, sc.site_name, sc.space_type_id, sc.space_type,
+    sc.breach_quarter,
+    sc.lead_time_days,
+    substr(sc.breach_quarter,1,4) || '-'
+        || substr('0' || ((CAST(substr(sc.breach_quarter,7,1) AS INTEGER)-1)*3 + 1), -2)
+        || '-01'                                        AS breach_date,
+    date(substr(sc.breach_quarter,1,4) || '-'
+        || substr('0' || ((CAST(substr(sc.breach_quarter,7,1) AS INTEGER)-1)*3 + 1), -2)
+        || '-01', '-' || sc.lead_time_days || ' days')  AS decide_by_date,
+    CAST(julianday(
+        date(substr(sc.breach_quarter,1,4) || '-'
+          || substr('0' || ((CAST(substr(sc.breach_quarter,7,1) AS INTEGER)-1)*3 + 1), -2)
+          || '-01', '-' || sc.lead_time_days || ' days')
+    ) - julianday('now') AS INTEGER)                    AS days_remaining
+FROM vw_space_collision sc
+WHERE sc.is_binding = 1
+  AND sc.breach_quarter IS NOT NULL
+  AND sc.lead_time_days IS NOT NULL
+  AND sc.space_status IN ('AT THE WALL NOW', 'COLLISION WARNING', 'watch');
+
+
+-- -----------------------------------------------------------------------------
+-- vw_decision_queue
+-- -----------------------------------------------------------------------------
+-- BUSINESS QUESTION : "What open decisions are on the clock, who owns them, and which
+--                      are overdue or closing?"
+-- WHO ASKS          : COO, VP Facilities, every decision owner.
+-- REFRESH CADENCE   : Live (writes land in the decisions table).
+-- METHOD            : Open decisions (decided_at IS NULL) with days_remaining to the
+--                      decide_by_date and an urgency band: OVERDUE (past), CLOSING
+--                      (within 30 days), OPEN. Sorted by decide_by_date.
+-- -----------------------------------------------------------------------------
+DROP VIEW IF EXISTS vw_decision_queue;
+CREATE VIEW vw_decision_queue AS
+SELECT
+    d.decision_id, d.site_id,
+    COALESCE(s.site_name, '(portfolio)')            AS site_name,
+    d.space_type_id, st.name                        AS space_type,
+    d.source, d.title, d.options_summary, d.owner,
+    d.decide_by_date, d.created_at,
+    CAST(julianday(d.decide_by_date) - julianday('now') AS INTEGER) AS days_remaining,
+    CASE
+        WHEN d.decide_by_date IS NULL THEN 'OPEN'
+        WHEN julianday(d.decide_by_date) < julianday('now') THEN 'OVERDUE'
+        WHEN CAST(julianday(d.decide_by_date) - julianday('now') AS INTEGER) <= 30 THEN 'CLOSING'
+        ELSE 'OPEN'
+    END                                             AS urgency
+FROM decisions d
+LEFT JOIN sites s       ON s.site_id = d.site_id
+LEFT JOIN space_types st ON st.space_type_id = d.space_type_id
+WHERE d.decided_at IS NULL
+ORDER BY d.decide_by_date;

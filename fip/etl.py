@@ -330,6 +330,18 @@ def load_phase4(conn, known):
                       int(r["badge_ready"]), int(r["parking_ready"])))
 
 
+def load_decisions(conn, known):
+    """Load the Phase 5 decision queue (seeded decisions). site_id may be a real
+    canonical site; space_type_id is optional."""
+    for i, r in enumerate(_read_csv("decisions.csv"), start=1):
+        site = canonicalize_code(r["site_id"], known) if (r["site_id"] or "").strip() else None
+        conn.execute("INSERT INTO decisions VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                     (i, site, parse_int(r["space_type_id"]), r["source"], r["title"],
+                      r["options_summary"] or None, r["owner"] or None,
+                      r["decide_by_date"] or None, r["decided_at"] or None,
+                      r["decision_note"] or None, r["created_at"] or None))
+
+
 def load_all(conn):
     """Run the full ingest into a freshly-schema'd connection. Returns a report dict."""
     report = {"actions": [], "conflicts": [], "exceptions": [],
@@ -344,6 +356,7 @@ def load_all(conn):
     load_programs(conn)
     load_occupancy(conn, known)
     load_phase4(conn, known)
+    load_decisions(conn, known)
     conn.commit()
     return report
 

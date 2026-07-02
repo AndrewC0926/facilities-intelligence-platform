@@ -36,6 +36,9 @@ PUBLISHED_VIEWS = [
     "vw_incentive_compliance",
     "vw_day_one_readiness",
     "vw_kpi_scorecard",
+    "vw_material_changes",
+    "vw_last_responsible_moment",
+    "vw_decision_queue",
 ]
 
 

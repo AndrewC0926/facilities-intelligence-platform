@@ -130,9 +130,12 @@ def test_diff_no_op_when_target_unchanged(built_db):
 def test_kpi_scorecard_returns_every_kpi_non_null(built_db):
     conn, _ = built_db
     rows = db.query(conn, "SELECT * FROM vw_kpi_scorecard")
-    expected = {"worst_case_seat_gap", "forecast_accuracy", "actions_with_lead_time",
-                "util_corridor_compliance", "day_one_readiness", "plan_reconciliation_gaps"}
-    assert {r["kpi_key"] for r in rows} == expected
+    # the six original KPIs are unchanged and still present, plus the Phase 5 latency row
+    original_six = {"worst_case_seat_gap", "forecast_accuracy", "actions_with_lead_time",
+                    "util_corridor_compliance", "day_one_readiness", "plan_reconciliation_gaps"}
+    keys = {r["kpi_key"] for r in rows}
+    assert original_six <= keys                       # existing rows unchanged / still present
+    assert keys == original_six | {"decision_latency"}  # exactly one new row added
     for r in rows:
         assert r["value"] is not None, r["kpi_key"]
         assert r["status"] is not None and r["status"] != ""

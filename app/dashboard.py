@@ -87,13 +87,41 @@ with tab_scorecard:
                "the bottleneck, forecasts graded, capital on time, space in its corridor, "
                "people ready day one). One row per KPI; the platform grades itself.")
     kpis = load("SELECT kpi_label, value, unit, target, status, detail FROM vw_kpi_scorecard")
-    cols = st.columns(len(kpis)) if 0 < len(kpis) <= 6 else [st]
+    cols = st.columns(len(kpis)) if 0 < len(kpis) <= 8 else [st]
     for i, (_, r) in enumerate(kpis.iterrows()):
         (cols[i] if len(cols) > 1 else st).metric(
             r["kpi_label"].split("(")[0].strip(), f"{r['value']:g} {r['unit']}", r["status"])
     _bg = {"AT RISK": "background-color:#f8d7da", "watch": "background-color:#fff3cd", "ok": ""}
     st.dataframe(kpis.style.apply(lambda row: [_bg.get(row["status"], "")] * len(row), axis=1),
                  use_container_width=True, hide_index=True)
+
+    # --- Decision queue (Phase 5): risks that need a human, on the clock ----------
+    st.markdown("---")
+    st.subheader("Decision queue")
+    st.caption("Source: `vw_decision_queue` — every material change or at-risk collision "
+               "becomes a queued decision with a deadline set by physics (the breach date "
+               "minus the fix's lead time). OVERDUE = past that date; CLOSING = within 30 days.")
+    dq = load("SELECT urgency, decide_by_date, days_remaining, site_name, space_type, "
+              "source, title, owner FROM vw_decision_queue")
+    if dq.empty:
+        st.success("No open decisions on the clock.")
+    else:
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Open decisions", len(dq))
+        m2.metric("🔴 OVERDUE", int((dq["urgency"] == "OVERDUE").sum()))
+        m3.metric("🟡 CLOSING", int((dq["urgency"] == "CLOSING").sum()))
+        _dbg = {"OVERDUE": "background-color:#f8d7da", "CLOSING": "background-color:#fff3cd", "OPEN": ""}
+        st.dataframe(dq.style.apply(lambda row: [_dbg.get(row["urgency"], "")] * len(row), axis=1),
+                     use_container_width=True, hide_index=True)
+
+    st.subheader("What changed since the last forecast")
+    st.caption("Source: `vw_material_changes` — the diff of the two most recent forecast snapshots.")
+    mc = load("SELECT site_name, space_type, what_changed, previous_value, current_value, direction "
+              "FROM vw_material_changes")
+    if mc.empty:
+        st.info("No material changes yet (need two forecast snapshots to compare).")
+    else:
+        st.dataframe(mc, use_container_width=True, hide_index=True)
 
 # === Tab: Capacity & Scenario =================================================
 with tab_cap:

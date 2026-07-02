@@ -1,0 +1,4 @@
+site_id,site_name,space_type_id,space_type,breach_quarter,lead_time_days,breach_date,decide_by_date,days_remaining
+arsenal-campus,Arsenal Campus,4,parking_stall,2026-Q4,270,2026-10-01,2026-01-04,-179
+hq-flagship,HQ & Flagship Factory,5,scif_seat,2027-Q2,540,2027-04-01,2025-10-08,-267
+seattle-hub,Seattle Engineering Hub,1,desk,2026-Q4,30,2026-10-01,2026-09-01,60

@@ -425,6 +425,12 @@ def seed_forecast_snapshots():
         ["2026-04-15", "arsenal-campus", 4, "2026-Q4", 83.0],   # revised earlier -> run 1 was 1 quarter off
         ["2026-04-15", "hq-flagship",    5, "2027-Q2", 100.0],  # same quarter -> run 1 was a hit
         ["2026-04-15", "seattle-hub",    1, "2026-Q4", 100.0],  # same quarter -> run 1 was a hit
+        # Phase 5 material-change fodder: a breach pushed LATER (better) and a
+        # utilization that crossed OUT of its corridor band (worse), between the two dates.
+        ["2026-01-15", "srm-complex",     4, "2026-Q4", 80.0],
+        ["2026-04-15", "srm-complex",     4, "2027-Q3", 82.0],   # breach later -> better
+        ["2026-01-15", "boston-maritime", 1, "",        70.0],   # in band (60-85)
+        ["2026-04-15", "boston-maritime", 1, "",        92.0],   # above band -> corridor crossing (worse)
     ]
     return _write("forecast_snapshots.csv",
                   ["snapshot_date", "site_id", "space_type_id",
@@ -491,6 +497,38 @@ def seed_phase4_space_capacity():
                   ["site_id", "space_type_id", "capacity", "capacity_status"], rows)
 
 
+# =============================================================================
+# PHASE 5 — DECISION LAYER
+# =============================================================================
+# Deterministic decision queue: one OVERDUE, one CLOSING (within 30 days of a
+# mid-2026 "today"), one OPEN (far out), and one already DECIDED (feeds the
+# decision-latency KPI). No site is special-cased; these just light up the paths.
+def seed_decisions():
+    rows = [
+        # site_id, space_type_id, source, title, options_summary, owner, decide_by_date, decided_at, decision_note, created_at
+        ["seattle-hub", 1, "collision",
+         "Seattle desk wall: expand floor or cap engineering hiring",
+         "expand floor / relocate a team / cap hiring", "VP Facilities",
+         "2026-05-01", "", "", "2026-04-01"],                                   # OVERDUE (decide-by in the past)
+        ["hq-flagship", 5, "accreditation",
+         "HQ SCIF accreditation: commit the build or defer cleared hiring",
+         "commit build / defer hiring / lease accredited space", "Security Director",
+         "2026-07-20", "", "", "2026-06-01"],                                   # CLOSING (within 30 days)
+        ["long-beach", "", "incentive",
+         "Long Beach incentive: confirm the hiring ramp to hold the grant",
+         "accelerate hiring / renegotiate terms / accept clawback", "Corp Dev",
+         "2027-03-01", "", "", "2026-06-15"],                                   # OPEN (far out)
+        ["arsenal-campus", 4, "collision",
+         "Arsenal parking wall: structured-deck expansion",
+         "build deck / shuttle + offsite / stagger shifts", "VP Facilities",
+         "2026-03-01", "2026-02-20", "Approved structured-deck expansion; funded FY26",
+         "2026-01-10"],                                                          # DECIDED (latency 41 days)
+    ]
+    return _write("decisions.csv",
+                  ["site_id", "space_type_id", "source", "title", "options_summary",
+                   "owner", "decide_by_date", "decided_at", "decision_note", "created_at"], rows)
+
+
 def main():
     paths = [
         seed_sites(), seed_leases(), seed_hris(), seed_mrp(),
@@ -499,7 +537,7 @@ def main():
         seed_space_capacity(), seed_requisition_pipeline(),
         seed_forecast_snapshots(), seed_incentive_agreements(),
         seed_accreditation_milestones(), seed_onboarding_cohorts(),
-        seed_phase4_space_capacity(),
+        seed_phase4_space_capacity(), seed_decisions(),
     ]
     print("Seeded source-system exports:")
     for p in paths:

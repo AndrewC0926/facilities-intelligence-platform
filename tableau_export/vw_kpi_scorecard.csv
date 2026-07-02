@@ -1,7 +1,8 @@
 sort_order,kpi_key,kpi_label,value,unit,target,status,detail
 1,worst_case_seat_gap,Worst-case seat-vs-fill gap (facilities as bottleneck),340,days,target <= 0,AT RISK,cleared @ HQ & Flagship Factory (scif_seat)
-2,forecast_accuracy,Forecast accuracy (aged-forecast hit rate),83.3,pct,target >= 70%,ok,6 aged forecast(s) scored
+2,forecast_accuracy,Forecast accuracy (aged-forecast hit rate),62.5,pct,target >= 70%,watch,8 aged forecast(s) scored
 3,actions_with_lead_time,Actions opened with lead time remaining,100.0,pct,target = 100%,ok,1 open collision action(s)
 4,util_corridor_compliance,Utilization corridor compliance (in target band),5.0,pct,target >= 60% in-band,watch,20 confirmed space(s) measured
 5,day_one_readiness,Day-one readiness (imminent cohorts fully ready),50.0,pct,target = 100%,watch,2 imminent cohort(s)
 6,plan_reconciliation_gaps,Sites where space cannot hold the hiring pipeline,3,sites,target = 0,AT RISK,10 site(s) reconciled
+7,decision_latency,Decision latency (median days to decide) + overdue,41.0,days,"target: fast, 0 overdue",AT RISK,3 overdue decision(s)

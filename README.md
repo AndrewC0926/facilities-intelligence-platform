@@ -55,7 +55,7 @@ and recommends shifting overflow to HQ & Flagship Factory (same region, ample sl
 ```
 1. SOURCES   simulated exports → seeds/*.csv      (ERP/CMMS · MRP · HRIS · acquired-site dump)
 2. INGEST    fip/etl.py        → cleans & reconciles dirty data into one canonical model
-3. STORE     sql/schema.sql    → 18 normalized tables in SQLite (fip.db)
+3. STORE     sql/schema.sql    → 19 normalized tables in SQLite (fip.db)
 4. SEMANTIC  sql/views.sql     → documented SQL views = the business logic (THE PRODUCT)
 5. DELIVERY  app/dashboard.py  → reads the views (so does Tableau) · tableau_export/*.csv
 ```
@@ -87,7 +87,7 @@ Prefer the pieces individually:
 make pipeline      # build everything, no dashboard (writes the DB, the reconciliation
                    # report, and one clean CSV per view in tableau_export/)
 make dashboard     # serve the dashboard against an existing build
-make test          # run the full test suite (74 tests)
+make test          # run the full test suite (80 tests)
 ```
 
 And two things you can run straight from the terminal:
@@ -101,7 +101,7 @@ python -m fip.ask collision            # ask a one-off question against the live
 
 ## The semantic layer: what each view answers
 
-These twenty-two SQL views *are* the product. Each one carries a comment block stating the
+These twenty-five SQL views *are* the product. Each one carries a comment block stating the
 business question, who asks it, and how often it refreshes.
 
 | View | The question it answers |
@@ -128,6 +128,9 @@ business question, who asks it, and how often it refreshes.
 | `vw_accreditation_pipeline` | What stage is each pending space in, and is its capacity confirmable yet? |
 | `vw_space_capacity_effective` | Which planned/audit-pending capacity has actually cleared accreditation? |
 | `vw_day_one_readiness` | For imminent onboarding cohorts, is every day-one need in place? |
+| `vw_decision_queue` ★ | What open decisions are on the clock, and which are OVERDUE or CLOSING? |
+| `vw_last_responsible_moment` | The last day to decide so the fix lands before the wall (breach minus lead time). |
+| `vw_material_changes` | Since the last forecast, what moved per site and space, better or worse? |
 
 ### Worked example: the question, the view, the decision
 
@@ -234,7 +237,7 @@ audit trail is always current.
 - **The dashboard and Tableau read the identical views.** `make pipeline` writes one
   clean CSV per view into [`tableau_export/`](tableau_export/), which is exactly what
   you would point Tableau at on day one.
-- **74 automated tests** cover the data cleaning, every view, the dated collision
+- **80 automated tests** cover the data cleaning, every view, the dated collision
   warning, the multi-constraint binding logic, the scenario math, the lease-cliff,
   health-score, occupancy, and KPI logic, and the brief. If a change breaks a number,
   the suite catches it before it ships. Run `make test`.
@@ -298,6 +301,23 @@ site added tomorrow flows through the scorecard with no code change.
 
 ---
 
+## Phase 5: Decision layer
+
+The earlier phases detect risks and price them, but a person still has to notice a
+change, gather people, and decide. Phase 5 makes that step explicit. Every material
+change and every at-risk collision becomes a queued decision with a deadline the
+platform computes from physics: the last responsible moment is the breach date minus
+the lead time of the fix, so the day to decide is often months before the wall
+itself. `vw_decision_queue` shows what is OVERDUE, CLOSING, or OPEN; a pipeline step
+opens those decisions automatically and idempotently from `vw_last_responsible_moment`;
+`vw_material_changes` diffs the two most recent forecast snapshots so nobody has to
+eyeball what moved; and a new scorecard row tracks decision latency, the median days
+from raising a decision to making it, plus the count overdue. The reason this matters:
+missed capital decisions fail silently. They do not throw an error. They expire an
+option, and you find out a quarter later when the building is full.
+
+---
+
 ## Roadmap
 
 The platform today reasons over a largely **static plan**. The next steps make it
@@ -322,7 +342,7 @@ owned action, to a funded decision.
 
 ---
 
-## The data model (18 tables)
+## The data model (19 tables)
 
 The portfolio is **10 sites**: a flagship mega-factory (Arsenal Campus), a campus
 under construction (Long Beach), a rocket-motor complex, an undersea-systems
@@ -348,6 +368,7 @@ Shark, ALTIUS, Bolt, SRM Supply, Lattice OS).
 | `incentive_agreements` | Corp Dev / finance | public job & capex commitments, measurement date, clawback risk |
 | `accreditation_milestones` | Security / build | design → construction → inspection → accreditation dates per site/space |
 | `onboarding_cohorts` | HR / onboarding | cohorts by start quarter with seat/equipment/badge/parking readiness |
+| `decisions` | decision layer | queued decisions with a physics-derived decide-by date, owner, and decided-at |
 
 See [`sql/schema.sql`](sql/schema.sql) for the full definitions, plus `etl_exceptions`,
 the quarantine table where un-reconcilable rows wait for a human.
@@ -360,8 +381,9 @@ fip/        seed.py etl.py reconcile.py          ← generate source data, clean
             db.py pipeline.py export.py ask.py
             scenario.py brief.py                 ← decision support (scenarios + exec brief)
             actions.py notify.py                 ← workflow (action age + stakeholder alerts)
+            diff.py decide.py                    ← change-impact diff + decision auto-queue
 app/        dashboard.py                          ← the Streamlit front end (presentation only)
 seeds/      *.csv   (the simulated source-system exports)
 tableau_export/  *.csv   (one clean extract per view. The Tableau handoff)
-tests/      74 tests across ingestion, every view, and all decision/workflow/occupancy/KPI logic
+tests/      80 tests across ingestion, every view, and all decision/workflow/occupancy/KPI logic
 ```

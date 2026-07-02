@@ -1,0 +1,6 @@
+decision_id,site_id,site_name,space_type_id,space_type,source,title,options_summary,owner,decide_by_date,created_at,days_remaining,urgency
+6,hq-flagship,HQ & Flagship Factory,5,scif_seat,collision,scif_seat wall at HQ & Flagship Factory: decide the fix before 2027-Q2,expand / relocate demand / accept the risk,,2025-10-08,2026-07-02,-267,OVERDUE
+5,arsenal-campus,Arsenal Campus,4,parking_stall,collision,parking_stall wall at Arsenal Campus: decide the fix before 2026-Q4,expand / relocate demand / accept the risk,,2026-01-04,2026-07-02,-179,OVERDUE
+1,seattle-hub,Seattle Engineering Hub,1,desk,collision,Seattle desk wall: expand floor or cap engineering hiring,expand floor / relocate a team / cap hiring,VP Facilities,2026-05-01,2026-04-01,-62,OVERDUE
+2,hq-flagship,HQ & Flagship Factory,5,scif_seat,accreditation,HQ SCIF accreditation: commit the build or defer cleared hiring,commit build / defer hiring / lease accredited space,Security Director,2026-07-20,2026-06-01,17,CLOSING
+3,long-beach,Long Beach Campus,,,incentive,Long Beach incentive: confirm the hiring ramp to hold the grant,accelerate hiring / renegotiate terms / accept clawback,Corp Dev,2027-03-01,2026-06-15,241,OPEN
